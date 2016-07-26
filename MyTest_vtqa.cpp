@@ -3,13 +3,15 @@ vtqa-Video Tracking for Quadrotor Aircraft
 This is a test program for tracking quadrotor.
 by Lin Lin July 13, 2016.
 */
+#include <Winsock2.h>
+#pragma comment(lib, "Ws2_32.lib")
 
 #include<opencv2/objdetect/objdetect.hpp>  
 #include<opencv2/highgui/highgui.hpp>  
 #include<opencv/cv.h>
 #include<cxcore.h>
 #include<iostream>  
-#include<stdio.h>  
+#include<stdio.h>
 
 using namespace std;  
 using namespace cv; 
@@ -36,15 +38,13 @@ int mkflag[4];
 int MARK_i = 0;
 CvPoint theCenterPos;
 
-//CvPoint ObjS[4] ;
-//CvPoint ObjE[4] ;
+struct TransData{
+	int x;
+	int y;
+};
 
-//Rect selection;
-//Point origin;
-//bool selectObject = false;
-//int trackObject = 0;
-
-IplImage* g_image=NULL;
+SOCKET socketClient;
+TransData transData;
 
 void detect_lk(IplImage*);
 IplImage* preprocess(IplImage*);
@@ -86,8 +86,27 @@ static void help()
 		"2. Use LeftButton to hit the four spots of the quadrotor with mouse.\n\n";
 }
 
+
+
 int main( )
 { 
+	//****Socket*****//初始化套接字
+	WSADATA wsaData;
+	WORD wVersion = MAKEWORD(1, 1);
+	::WSAStartup(wVersion, &wsaData);
+	SOCKADDR_IN addrSrv;
+	addrSrv.sin_addr.S_un.S_addr = ::inet_addr("127.0.0.1");
+	addrSrv.sin_family = AF_INET;
+	addrSrv.sin_port = ::htons(6000);
+	//SOCKET socketClient = ::socket(AF_INET, SOCK_STREAM, 0);
+	socketClient = ::socket(AF_INET, SOCK_STREAM, 0);
+	//连接
+	::connect(socketClient, (SOCKADDR*)&addrSrv, sizeof(SOCKADDR));
+	char sSend[128] = "Hello Lin!";
+	//cout<<"初始完毕！准备发送数据！！"<<endl;
+	//***************//
+
+
 	color_tab[0] = CV_RGB(255,255,255);
 	color_tab[1] = CV_RGB(255,0,0);
 	color_tab[2] = CV_RGB(0,255,0);
@@ -97,7 +116,7 @@ int main( )
 
 	for (int k=0;k<4;k++)
 		mkflag[k] = 1;
-
+	
 	CvCapture* capture=NULL;  
 	int delay = 20; 
 	char *filename = "D:/linlin/video/5.avi";
@@ -115,6 +134,7 @@ int main( )
 	{
 		//capture=cvCaptureFromCAM(0); 
 		IplImage* fra=cvQueryFrame(capture);
+		
 		if (!fra)
 		{	
 			if (!(capture = cvCaptureFromAVI(filename)))	
@@ -128,6 +148,7 @@ int main( )
 		cvShowImage("f",fra);
 
 		//预处理 
+		IplImage* g_image=NULL;
 		g_image= preprocess(fra);
 		
 		//金字塔LK光流法动捕
@@ -140,6 +161,7 @@ int main( )
 		if(delay>=0&&usr==32) //"Space" 
 		{	
 			paused = true;
+			//::send(socketClient, sSend, strlen(sSend), 0);
 			waitKey(0);
 		}
 		else if (usr==27) //"ESC"
@@ -149,6 +171,10 @@ int main( )
 	cvReleaseCapture(&capture);
 	cvDestroyWindow("Track");
 	cvDestroyWindow("f");
+
+	::closesocket(socketClient);
+	//清理套接字
+	::WSACleanup();
 
 	return 0;
 }
@@ -418,6 +444,10 @@ void detect_lk(IplImage* fra) //fra是实参 、frame、img 是空的 :IplImage
 			theCenterPos.x = theCenterPos.x/mkcount;
 			theCenterPos.y = theCenterPos.y/mkcount;
 			cvCircle(markImg, theCenterPos, 6, CV_RGB(50,180,255),CV_FILLED);
+			
+			transData.x = theCenterPos.x;
+			transData.y = theCenterPos.y;
+			::send(socketClient, (char *)&transData, sizeof(TransData), 0);
 		}
 	}
 
@@ -456,5 +486,4 @@ void detect_lk(IplImage* fra) //fra是实参 、frame、img 是空的 :IplImage
 	cvReleaseImage( &pyrA );
 	cvReleaseImage( &pyrB );
 	//cvReleaseImage( &img );
-
 }
