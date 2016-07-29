@@ -6,10 +6,14 @@ by Lin Lin July 13, 2016.
 #include <Winsock2.h>
 #pragma comment(lib, "Ws2_32.lib")
 
-#include<opencv2/objdetect/objdetect.hpp>  
-#include<opencv2/highgui/highgui.hpp>  
-#include<opencv/cv.h>
+//#include<opencv/cv.h>
+//#include<opencv2/highgui/highgui.hpp>  
+#include <opencv\highgui.h>
+#include <opencv\cv.h>
+
+#include<opencv2/objdetect/objdetect.hpp> 
 #include<cxcore.h>
+
 #include<iostream>  
 #include<stdio.h>
 
@@ -20,9 +24,20 @@ const int MAX_CORNERS = 500;
 const int CONTOUR_MAX_AERA = 10;
 
 #define MAX_CLUSTERS 5
-//CvScalar color_tab[MAX_CLUSTERS];
-
 CvScalar color_tab[6];
+const char* TrackWindowName = "Processed";
+const char* OriginWindowName = "Original";
+//const string PProcessWindowName = "Thresholded Image";
+int V_MIN = 79;
+int V_MAX = 256;
+//default capture width and height
+const int FRAME_WIDTH = 640;
+const int FRAME_HEIGHT = 480;
+//max number of objects to be detected in frame
+const int MAX_NUM_OBJECTS=50;
+//minimum and maximum object area
+const int MIN_OBJECT_AREA = 5*5;
+const int MAX_OBJECT_AREA = FRAME_HEIGHT*FRAME_WIDTH/1.5;
 
 
 IplImage **frame = 0;             //定义一个IplImage型数组
@@ -42,36 +57,26 @@ struct TransData{
 	int x;
 	int y;
 };
-
-SOCKET socketClient;
 TransData transData;
 
+SOCKET socketClient;
+void initSocket();
 void detect_lk(IplImage*);
 IplImage* preprocess(IplImage*);
-
-static void onMouse( int event, int x, int y, int, void* )
+void preprocess(Mat &srcimg, Mat&thresholdImg);
+void trackObject(int &x, int &y, Mat&thresholdImg, Mat &markImg);
+void drawObject(int x, int y,Mat &frame);
+void createTrackbars();
+static void onMouse( int event, int x, int y, int, void* );
+void on_trackbar( int, void* )
 {
-	switch( event )
-	{
-	case CV_EVENT_LBUTTONDOWN:
-		if (paused)
-		{
-			markPos[MARK_i%4] = cvPoint(x,y);
-			MARK_i++;
-			cout<<"FindMark: ID_"<<MARK_i<<" "<<x<<" "<<y<<endl;
-			if (4 == MARK_i)   //指定了4个标记
-			{
-				MARK_i = 0;
-				MARKASSIGNED = 0; 
-				for (int k=0;k<4;k++)
-					mkflag[k] = 1;
-			}
-
-		}
-		break;
-	case CV_EVENT_LBUTTONUP:
-		break;
-	}
+	//This function gets called whenever a
+	// trackbar position is changed
+}
+string intToString(int number){
+	std::stringstream ss;
+	ss << number;
+	return ss.str();
 }
 
 static void help()
@@ -86,97 +91,156 @@ static void help()
 		"2. Use LeftButton to hit the four spots of the quadrotor with mouse.\n\n";
 }
 
-
-
 int main( )
 { 
-	//****Socket*****//初始化套接字
-	WSADATA wsaData;
-	WORD wVersion = MAKEWORD(1, 1);
-	::WSAStartup(wVersion, &wsaData);
-	SOCKADDR_IN addrSrv;
-	addrSrv.sin_addr.S_un.S_addr = ::inet_addr("127.0.0.1");
-	addrSrv.sin_family = AF_INET;
-	addrSrv.sin_port = ::htons(6000);
-	//SOCKET socketClient = ::socket(AF_INET, SOCK_STREAM, 0);
-	socketClient = ::socket(AF_INET, SOCK_STREAM, 0);
-	//连接
-	::connect(socketClient, (SOCKADDR*)&addrSrv, sizeof(SOCKADDR));
-	char sSend[128] = "Hello Lin!";
-	//cout<<"初始完毕！准备发送数据！！"<<endl;
-	//***************//
+	//color_tab[0] = CV_RGB(255,255,255); //init colors
+	//color_tab[1] = CV_RGB(255,0,0);
+	//color_tab[2] = CV_RGB(0,255,0);
+	//color_tab[3] = CV_RGB(100,100,255);
+	//color_tab[4] = CV_RGB(255,0,255);
+	//color_tab[5] = CV_RGB(255,255,0);
 
+	//initSocket();
 
-	color_tab[0] = CV_RGB(255,255,255);
-	color_tab[1] = CV_RGB(255,0,0);
-	color_tab[2] = CV_RGB(0,255,0);
-	color_tab[3] = CV_RGB(100,100,255);
-	color_tab[4] = CV_RGB(255,0,255);
-	color_tab[5] = CV_RGB(255,255,0);
+	//help();
 
-	for (int k=0;k<4;k++)
-		mkflag[k] = 1;
+	//for (int k=0;k<4;k++)
+	//	mkflag[k] = 1;
+
+	//setMouseCallback(TrackWindowName, onMouse );
+
+	createTrackbars();//create slider bars for filtering
 	
-	CvCapture* capture=NULL;  
-	int delay = 20; 
-	char *filename = "D:/linlin/video/5.avi";
-	if (!(capture = cvCaptureFromAVI(filename)))	
-	{   
-		fprintf(stderr, "Can not open file %s.\n", filename);
-		return -2;
-	}
-	namedWindow("Track");
-	setMouseCallback( "Track", onMouse );
+	int delay = 30; 
+	char *filename = "D:/linlin/video/5m-15m.mov";
+	//char *filename = "D:/linlin/video/5.avi";	
 
-	help();
+	//Matrix to store each frame of the webcam feed
+	Mat cameraFeed;
+	////matrix storage for GRAY image
+	//Mat grayImg;
+	//matrix storage for binary threshold image
+	Mat thresholdImg;
+	//x and y values for the location of the object
+	int x=0, y=0;
 
-	while (1)
-	{
-		//capture=cvCaptureFromCAM(0); 
-		IplImage* fra=cvQueryFrame(capture);
-		
-		if (!fra)
+	namedWindow(TrackWindowName);
+
+	VideoCapture capture(filename);
+	while(1){
+		//store image to matrix
+		//capture.read(cameraFeed);
+		if (!capture.read(cameraFeed))
 		{	
-			if (!(capture = cvCaptureFromAVI(filename)))	
-			{   
-				fprintf(stderr, "Can not open file %s.\n", filename);
-				return -2;
-			}
-			if (!(fra=cvQueryFrame(capture)))
+			capture = VideoCapture(filename);
+			if (!capture.read(cameraFeed))
 				break; 
 		}
-		cvShowImage("f",fra);
+		preprocess(cameraFeed, thresholdImg);
 
-		//预处理 
-		IplImage* g_image=NULL;
-		g_image= preprocess(fra);
-		
-		//金字塔LK光流法动捕
-		detect_lk(g_image);
-		
-		cvReleaseImage( &g_image );
+		trackObject(x,y,thresholdImg,cameraFeed);
 
+		//show frames 
+		imshow(OriginWindowName,cameraFeed);
+		imshow(TrackWindowName,thresholdImg);
+
+		//delay 30ms so that screen can refresh.
+		//image will not appear without this waitKey() command
 		int usr = waitKey (delay);
-
 		if(delay>=0&&usr==32) //"Space" 
 		{	
-			paused = true;
+			//paused = true;
 			//::send(socketClient, sSend, strlen(sSend), 0);
 			waitKey(0);
 		}
 		else if (usr==27) //"ESC"
 			break;
-		paused =false;
-	}
-	cvReleaseCapture(&capture);
-	cvDestroyWindow("Track");
-	cvDestroyWindow("f");
+		//paused =false;
 
-	::closesocket(socketClient);
+	}
+
+	//CvCapture* capture=NULL; 
+	//if (!(capture = cvCaptureFromAVI(filename)))	
+	//{   
+	//	fprintf(stderr, "Can not open file %s.\n", filename);
+	//	return -2;
+	//}
+	//while (1)
+	//{
+	//	//capture=cvCaptureFromCAM(0); 
+	//	IplImage* fra=cvQueryFrame(capture);	
+	//	if (!fra)
+	//	{	
+	//		if (!(capture = cvCaptureFromAVI(filename)))	
+	//		{   
+	//			fprintf(stderr, "Can not open file %s.\n", filename);
+	//			return -2;
+	//		}
+	//		if (!(fra=cvQueryFrame(capture)))
+	//			break; 
+	//	}
+	//	cvShowImage("f",fra);
+
+	//	//预处理 
+	//	IplImage* g_image=NULL;
+	//	g_image= preprocess(fra);
+	//	
+	//	//金字塔LK光流法动捕
+	//	//detect_lk(g_image);
+	//	
+	//	cvShowImage(TrackWindowName, g_image);
+	//	cvReleaseImage( &g_image );
+
+	//	int usr = waitKey (delay);
+
+	//	if(delay>=0&&usr==32) //"Space" 
+	//	{	
+	//		paused = true;
+	//		//::send(socketClient, sSend, strlen(sSend), 0);
+	//		waitKey(0);
+	//	}
+	//	else if (usr==27) //"ESC"
+	//		break;
+	//	paused =false;
+	//}
+	//cvReleaseCapture(&capture);
+	//cvDestroyWindow(TrackWindowName);
+	//cvDestroyWindow("f");
+
+	//::closesocket(socketClient);
 	//清理套接字
-	::WSACleanup();
+	//::WSACleanup();
 
 	return 0;
+}
+
+void createTrackbars(){
+	//create window for trackbars
+	namedWindow(TrackWindowName);
+	//create memory to store trackbar name on window
+	char TrackbarName[50];
+	sprintf( TrackbarName, "V_MIN", V_MIN);
+	sprintf( TrackbarName, "V_MAX", V_MAX);
+	createTrackbar( "V_MIN", TrackWindowName, &V_MIN, V_MAX, on_trackbar );
+	createTrackbar( "V_MAX", TrackWindowName, &V_MAX, V_MAX, on_trackbar );
+}
+
+void preprocess(Mat &srcimg, Mat&thresholdImg)
+{
+	//convert frame from BGR to GRAY colorspace
+	cvtColor(srcimg,thresholdImg,CV_BGR2GRAY);
+	//filter image between values and store filtered image to
+	//threshold matrix
+	inRange(thresholdImg,Scalar(V_MIN),Scalar(V_MAX),thresholdImg);
+	//create structuring element that will be used to "dilate" and "erode" image.
+	//the element chosen here is a 3px by 3px rectangle
+	Mat erodeElement = getStructuringElement( MORPH_RECT,Size(3,3));
+	//dilate with larger element so make sure object is nicely visible
+	Mat dilateElement = getStructuringElement( MORPH_RECT,Size(8,8));
+	erode(thresholdImg,thresholdImg,erodeElement);
+	erode(thresholdImg,thresholdImg,erodeElement);
+	dilate(thresholdImg,thresholdImg,dilateElement);
+	dilate(thresholdImg,thresholdImg,dilateElement);
 }
 
 //预处理 
@@ -185,23 +249,119 @@ IplImage* preprocess(IplImage* img)
 	IplImage* image=cvCreateImage(cvGetSize(img),img->depth,1);//fra-原图,image-复制灰度图
 	cvCvtColor( img, image, CV_BGR2GRAY );
 
+	//inRange(img,Scalar(V_MIN),Scalar(V_MAX),img);
+
 	// 二值化
-	cvThreshold( image, image, 200, 255, CV_THRESH_BINARY );
-	// 中值滤波，消除小的噪声 
+	//cvThreshold( image, image, 200, 255, CV_THRESH_BINARY );
+	//// 中值滤波，消除小的噪声 
 	cvSmooth( image, image, CV_MEDIAN, 3, 0, 0, 0 );
 	// 向下采样，去掉噪声，图像是原图像的四分之一 
-	
+	//
 	IplImage* pyr = cvCreateImage( cvSize((image->width & -2)/2, (image->height & -2)/2), image->depth,image->nChannels);
 	cvPyrDown( image, pyr, CV_GAUSSIAN_5x5 );
 	// 做膨胀操作，消除目标的不连续空洞 
 	cvDilate( pyr, pyr, 0, 1 ); 
-	// 向上采样，恢复图像
+	// 向上采样，恢复图像 
 	cvPyrUp( pyr, image, CV_GAUSSIAN_5x5 ); 
-	//cvThreshold( image, image, 100, 255, CV_THRESH_BINARY );	
+	cvThreshold( image, image, 100, 255, CV_THRESH_BINARY );	
 	cvReleaseImage( &pyr );// free memory 
 	
 	//cvShowImage("processed",image);
 	return image;
+}
+
+void trackObject(int &x, int &y, Mat&thresholdImg, Mat &markImg)
+{
+	vector<Point> mpoints;
+	struct Lines{
+		float slope;
+		float dis;
+		int i;
+		int j;
+	};
+	vector<Lines> mlines;
+
+	Mat temp;
+	thresholdImg.copyTo(temp);
+	//these two vectors needed for output of findContours
+	vector< vector<Point> > contours;
+	vector<Vec4i> hierarchy;
+	//find contours of filtered image using openCV findContours function
+	findContours(temp,contours,hierarchy,CV_RETR_CCOMP,CV_CHAIN_APPROX_SIMPLE );
+	//use moments method to find our filtered object
+	double refArea = 0;
+	bool objectFound = false;
+	if (hierarchy.size() > 0) {
+		int numObjects = hierarchy.size();
+		//if number of objects greater than MAX_NUM_OBJECTS we have a noisy filter
+		if(numObjects<MAX_NUM_OBJECTS){
+			for (int index = 0; index >= 0; index = hierarchy[index][0]) {
+
+				Moments moment = moments((cv::Mat)contours[index]);
+				double area = moment.m00;
+				//if the area is less than 20 px by 20px then it is probably just noise
+				//if the area is the same as the 3/2 of the image size, probably just a bad filter
+				//we only want the object with the largest area so we safe a reference area each
+				//iteration and compare it to the area in the next iteration.
+				//if(area>MIN_OBJECT_AREA && area<MAX_OBJECT_AREA && area>refArea){
+				//	x = moment.m10/area;
+				//	y = moment.m01/area;
+				//	objectFound = true;
+				//	refArea = area;
+				//}else objectFound = false;
+				if(area>MIN_OBJECT_AREA && area<MAX_OBJECT_AREA){
+					x = moment.m10/area;
+					y = moment.m01/area;
+					objectFound = true;
+					refArea = area;
+					mpoints.push_back(Point(x,y));
+					//draw object location on screen
+					drawObject(x,y,markImg);
+				}else objectFound = false;
+			}
+			//let user know you found an object
+			if(objectFound == true)
+			{
+				putText(markImg,"Tracking",Point(0,30),2,1,Scalar(0,255,0),2);
+				//draw object location on screen
+				//drawObject(x,y,markImg);
+				for (int i=0;i<mpoints.size();i++)
+				{
+					for(int j=0;j<i;j++)
+					{
+						Lines ij;
+						int dx = (mpoints[i] - mpoints[j]).x;
+						int dy = (mpoints[i] - mpoints[j]).y;
+						ij.slope = (float)dy/dx;
+						ij.dis = dx*dx +dy*dy;
+						ij.i = i;
+						ij.j = j;
+						mlines.push_back(ij);
+					}
+				}
+				float ACCP_s = 0.3;
+				float ACCP_d = 400;
+				for (int k =0; k<mlines.size();k++)
+				{
+					for (int m=0;m<k;m++)
+					{
+						
+						if(abs(mlines[k].slope - mlines[m].slope) < ACCP_s && abs(mlines[k].dis - mlines[m].dis) < ACCP_d)
+						{
+							int i = mlines[k].i;
+							int j = mlines[k].j;
+							line(markImg,mpoints[i],mpoints[j],Scalar(0,0,255),1);
+							i = mlines[m].i;
+							j = mlines[m].j;
+							line(markImg,mpoints[i],mpoints[j],Scalar(0,0,255),1);
+						}
+					}
+				}
+			}
+		}
+		else 
+			putText(markImg,"TOO MUCH NOISE! ADJUST FILTER",Point(0,50),1,2,Scalar(0,0,255),2);
+	}
 }
 
 void detect_lk(IplImage* fra) //fra是实参 、frame、img 是空的 :IplImage   
@@ -445,9 +605,10 @@ void detect_lk(IplImage* fra) //fra是实参 、frame、img 是空的 :IplImage
 			theCenterPos.y = theCenterPos.y/mkcount;
 			cvCircle(markImg, theCenterPos, 6, CV_RGB(50,180,255),CV_FILLED);
 			
-			transData.x = theCenterPos.x;
-			transData.y = theCenterPos.y;
-			::send(socketClient, (char *)&transData, sizeof(TransData), 0);
+			//transData.x = theCenterPos.x;
+			//transData.y = theCenterPos.y;
+			
+			//::send(socketClient, (char *)&transData, sizeof(TransData), 0);
 		}
 	}
 
@@ -487,3 +648,79 @@ void detect_lk(IplImage* fra) //fra是实参 、frame、img 是空的 :IplImage
 	cvReleaseImage( &pyrB );
 	//cvReleaseImage( &img );
 }
+
+
+void drawObject(int x, int y,Mat &frame)
+{
+	//use some of the openCV drawing functions to draw crosshairs
+	//on your tracked image!
+	//added 'if' and 'else' statements to prevent
+	//memory errors from writing off the screen (ie. (-25,-25) is not within the window!)
+
+	circle(frame,Point(x,y),20,Scalar(0,255,0),1);
+	if(y-25>0)
+		line(frame,Point(x,y),Point(x,y-25),Scalar(0,255,0),1);
+	else line(frame,Point(x,y),Point(x,0),Scalar(0,255,0),1);
+	if(y+25<FRAME_HEIGHT)
+		line(frame,Point(x,y),Point(x,y+25),Scalar(0,255,0),1);
+	else line(frame,Point(x,y),Point(x,FRAME_HEIGHT),Scalar(0,255,0),1);
+	if(x-25>0)
+		line(frame,Point(x,y),Point(x-25,y),Scalar(0,255,0),1);
+	else line(frame,Point(x,y),Point(0,y),Scalar(0,255,0),1);
+	if(x+25<FRAME_WIDTH)
+		line(frame,Point(x,y),Point(x+25,y),Scalar(0,255,0),1);
+	else line(frame,Point(x,y),Point(FRAME_WIDTH,y),Scalar(0,255,0),1);
+
+	putText(frame,intToString(x)+","+intToString(y),Point(x,y+30),1,1,Scalar(0,255,0),1);
+
+}
+
+
+
+static void onMouse( int event, int x, int y, int, void* )
+{
+	switch( event )
+	{
+	case CV_EVENT_LBUTTONDOWN:
+		if (paused)
+		{
+			markPos[MARK_i%4] = cvPoint(x,y);
+			MARK_i++;
+			cout<<"FindMark: ID_"<<MARK_i<<" "<<x<<" "<<y<<endl;
+			if (4 == MARK_i)   //指定了4个标记
+			{
+				MARK_i = 0;
+				MARKASSIGNED = 0; 
+				for (int k=0;k<4;k++)
+					mkflag[k] = 1;
+			}
+
+		}
+		break;
+	case CV_EVENT_LBUTTONUP:
+		break;
+	}
+}
+
+
+void initSocket()
+{
+	//****Socket*****//初始化套接字
+	WSADATA wsaData;
+	WORD wVersion = MAKEWORD(1, 1);
+	::WSAStartup(wVersion, &wsaData);
+	SOCKADDR_IN addrSrv;
+	addrSrv.sin_addr.S_un.S_addr = ::inet_addr("127.0.0.1");
+	addrSrv.sin_family = AF_INET;
+	addrSrv.sin_port = ::htons(6000);
+
+	//SOCKET socketClient = ::socket(AF_INET, SOCK_STREAM, 0);
+	socketClient = ::socket(AF_INET, SOCK_STREAM, 0);
+	::connect(socketClient, (SOCKADDR*)&addrSrv, sizeof(SOCKADDR));//连接
+
+	//char sSend[128] = "Hello Lin!";
+	//cout<<"初始完毕！准备发送数据！！"<<endl;
+	//***************//
+}
+
+
