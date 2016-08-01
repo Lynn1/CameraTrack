@@ -8,71 +8,51 @@ by Lin Lin July 13, 2016.
 
 #include <opencv\highgui.h>
 #include <opencv\cv.h>
+#pragma comment(lib, "opencv_highgui249.lib")
+#pragma comment(lib, "opencv_core249.lib")
+#pragma comment(lib, "opencv_imgproc249.lib")
 
-//#include<opencv2/objdetect/objdetect.hpp> 
-#include<cxcore.h>
-
-#include<iostream>  
-#include<stdio.h>
+#define _USE_MATH_DEFINES
+#include <math.h>  
 
 using namespace std;  
 using namespace cv; 
 
-const int MAX_CORNERS = 500;
-const int CONTOUR_MAX_AERA = 10;
-
-#define MAX_CLUSTERS 5
-CvScalar color_tab[6];
-const char* TrackWindowName = "Processed";
-const char* OriginWindowName = "Original";
-//const string PProcessWindowName = "Thresholded Image";
-int V_MIN = 79;
-int V_MAX = 256;
-int S_Diff = 2;//acceptable slope difference between parallel lines
-int S_Diff_MAX = 20;
-int D_Diff = 20;//acceptable distance difference between parallel lines
-int D_Diff_MAX = 50;
-//default capture width and height
-const int FRAME_WIDTH = 640;
+//camera parameter
+const int F_LEN = 16;			//focal length = 16mm
+const float ACTUAL_WIDTH = 4.8; //4.8mm*3.6mm
+const float ACTUAL_HEIGHT = 3.6;
+const int FRAME_WIDTH = 640;	//default capture width and height
 const int FRAME_HEIGHT = 480;
-//max number of objects to be detected in frame
-const int MAX_NUM_OBJECTS=50;
-//minimum and maximum object area
-const int MIN_OBJECT_AREA = 5*5;
+
+//tracing parameter
+const int MAX_NUM_OBJECTS=50;	//max number of objects to be detected in frame
+const int MIN_OBJECT_AREA = 5*5;	//minimum and maximum object area
 const int MAX_OBJECT_AREA = FRAME_HEIGHT*FRAME_WIDTH/1.5;
 
+int V_MIN = 79;
+int V_MAX = 256;
+//int S_Diff = 2;		//acceptable slope difference between parallel lines
+//int S_Diff_MAX = 20;
+int D_Diff = 5;	//acceptable distance difference between parallel lines
+int D_Diff_MAX = 20;
 
-IplImage **frame = 0;             //定义一个IplImage型数组
-int t = 0;                             //存储某一帧的变量
-const int N = 2;                       //需要采集的帧数;
-int pre=0, cur=0;                      //pre前一帧,cur当前帧
+const char* TrackWindowName = "Processed";
+const char* OriginWindowName = "Original";
 
-bool paused = false;
-int MARKASSIGNED = -1;			//-1：标记未指定、0：刚新指定了标记，还未配置、1：标记已配置好
-CvPoint markPos[4];
-CvRect markRec[4];
-int mkflag[4];
-int MARK_i = 0;
-CvPoint theCenterPos;
 
-struct TransData{
-	int x;
-	int y;
-};
-TransData transData;
-
-SOCKET socketClient;
-void initSocket();
+void initSocket(SOCKET &socketClient);
+void createTrackbars();
 void preprocess(Mat &srcimg, Mat&thresholdImg);
 void trackObject(int &cx, int &cy, Mat&thresholdImg, Mat &markImg);
 void drawObject(int x, int y,Mat &frame,int flag =0);
-void createTrackbars();
+int  TransAngle(int x, int y,double &h_spin, double &v_spin);
 void on_trackbar( int, void* )
 {
 	//This function gets called whenever a trackbar position is changed
 }
 string intToString(int number){
-	std::stringstream ss;
+	stringstream ss;
 	ss << number;
 	return ss.str();
 }
@@ -91,12 +71,14 @@ static void help()
 		"\t\t20 recommended.\n";
 }
 
-int main( )
+int main()
 { 
 	help();
-	//initSocket();
 	createTrackbars();//create slider bars for filtering
-	
+
+	SOCKET socketClient;
+	initSocket(socketClient);
+		
 	int delay = 30; 
 	char *filename = "D:/linlin/video/5m-15m.mov";
 	//char *filename = "D:/linlin/video/5.avi";	
@@ -107,6 +89,10 @@ int main( )
 	Mat thresholdImg;
 	//x and y values for the location of the object
 	int x=0, y=0;
+	struct TransData{
+		double h_spin;
+		double v_spin;
+	};
 
 	namedWindow(TrackWindowName);
 
@@ -122,8 +108,20 @@ int main( )
 		}
 		preprocess(cameraFeed, thresholdImg);
 		trackObject(x,y,thresholdImg,cameraFeed);
+		
+		double h_spin,v_spin;
+		int s = TransAngle(x,y,h_spin,v_spin);
 
-		//socketClient send message:
+		if (s)
+		{
+			TransData t;
+			t.h_spin = h_spin;
+			t.v_spin = v_spin;
+
+			//socketClient send message
+			//send(socketClient, "123", strlen("123"), 0);
+			send(socketClient, (char*)&t, sizeof(t), 0);
+		}
 
 		//show frames 
 		imshow(OriginWindowName,cameraFeed);
@@ -138,9 +136,9 @@ int main( )
 			break;
 	}
 
-	//::closesocket(socketClient);
 	//清理套接字
-	//::WSACleanup();
+	closesocket(socketClient);
+	WSACleanup();
 
 	capture.release();
 	destroyAllWindows();
@@ -153,9 +151,8 @@ void createTrackbars(){
 	namedWindow(TrackWindowName);
 	createTrackbar( "V_MIN", TrackWindowName, &V_MIN, V_MAX, on_trackbar );
 	createTrackbar( "V_MAX", TrackWindowName, &V_MAX, V_MAX, on_trackbar );
-
-	createTrackbar("S_Diff", TrackWindowName, &S_Diff, S_Diff_MAX, on_trackbar );
-	createTrackbar( "Dst_Diff", TrackWindowName, &D_Diff, D_Diff_MAX, on_trackbar );
+	//createTrackbar("S_Diff", TrackWindowName, &S_Diff, S_Diff_MAX, on_trackbar );
+	createTrackbar( "ERR_ACP", TrackWindowName, &D_Diff, D_Diff_MAX, on_trackbar );
 }
 
 
@@ -244,23 +241,25 @@ void trackObject(int &cx, int &cy, Mat&thresholdImg, Mat &markImg)
 
 						ij.dx = (ij.ep - ij.sp).x;
 						ij.dy = (ij.ep - ij.sp).y;
-						ij.slope = abs(ij.dx)>=abs(ij.dy) ? (float)ij.dy/ij.dx : (float)ij.dx/ij.dy;//防止分母为0
+						ij.slope = abs(ij.dx)>=abs(ij.dy) ? (float)ij.dy/(float)ij.dx : (float)ij.dx/(float)ij.dy;//防止分母为0
 						ij.dis = ij.dx*ij.dx +ij.dy*ij.dy;
 						ij.i = i;
 						ij.j = j;
 						mlines.push_back(ij);
+						line(markImg,ij.sp,ij.ep,CV_RGB(30,30,30),1);
 					}
 				}
-				float ACCP_s = (float)S_Diff/S_Diff_MAX;
-				int ACCP_d2 = D_Diff*D_Diff;
+				//float ACCP_s = (float)S_Diff/S_Diff_MAX;
+				//int ACCP_d2 = D_Diff*D_Diff;
 				//找出所有连线中的平行线
 				for (int k =0; k<mlines.size();k++)
 				{
 					for (int m=0;m<k;m++)
 					{
-						if((abs(mlines[k].dx) - abs(mlines[k].dy))*(abs(mlines[m].dx) - abs(mlines[m].dy))>=0 
-							&& abs(mlines[k].slope - mlines[m].slope) < ACCP_s 
-							&& abs(mlines[k].dis - mlines[m].dis) < ACCP_d2)
+						//if((abs(mlines[k].dx) - abs(mlines[k].dy))*(abs(mlines[m].dx) - abs(mlines[m].dy))>=0 
+						//	&& abs(mlines[k].slope - mlines[m].slope) < ACCP_s 
+						//	&& abs(mlines[k].dis - mlines[m].dis) < ACCP_d2)
+						if( abs(abs(mlines[k].dx) - abs(mlines[m].dx))<D_Diff && abs(abs(mlines[k].dy)-abs(mlines[m].dy))<D_Diff && mlines[k].slope * mlines[m].slope >= 0 )
 						{
 							ParallelLines pl;
 							pl.a = mlines[k];
@@ -300,7 +299,7 @@ void trackObject(int &cx, int &cy, Mat&thresholdImg, Mat &markImg)
 					Point sum = plines[0].a.sp + plines[0].a.ep + plines[0].b.sp+ plines[0].b.ep ;
 					cx = sum.x / 4;
 					cy = sum.y / 4;
-					drawObject(cx, cy, markImg,1);//weak center
+					drawObject(cx, cy, markImg,2);//weak center
 				}
 			}
 		}
@@ -319,49 +318,69 @@ void drawObject(int x, int y,Mat &frame, int flag)
 	//on your tracked image!
 	//added 'if' and 'else' statements to prevent
 	//memory errors from writing off the screen (ie. (-25,-25) is not within the window!)
-	if (flag==1)//Draw Center
+	Scalar color = Scalar(0,255,0);
+
+	if (!flag)
 	{
-		circle(frame,Point(x,y),6,CV_RGB(255,80,80),CV_FILLED);
-		return;
+		circle(frame,Point(x,y),15,color,1);
+		if(y-25>0)
+			line(frame,Point(x,y),Point(x,y-25),color,1);
+		else line(frame,Point(x,y),Point(x,0),color,1);
+		if(y+25<FRAME_HEIGHT)
+			line(frame,Point(x,y),Point(x,y+25),color,1);
+		else line(frame,Point(x,y),Point(x,FRAME_HEIGHT),color,1);
+		if(x-25>0)
+			line(frame,Point(x,y),Point(x-25,y),color,1);
+		else line(frame,Point(x,y),Point(0,y),color,1);
+		if(x+25<FRAME_WIDTH)
+			line(frame,Point(x,y),Point(x+25,y),color,1);
+		else line(frame,Point(x,y),Point(FRAME_WIDTH,y),color,1);
 	}
-	else if (flag==2)//Draw Weak Center
+	else
 	{
-		circle(frame,Point(x,y),6,CV_RGB(80,180,255),CV_FILLED);
-		return;
+		if (flag==1)//Draw Center
+			color = CV_RGB(80,80,255);
+		else if (flag==2)//Draw Weak Center
+			color = CV_RGB(160,160,255);
+		circle(frame,Point(x,y),6,color,CV_FILLED);
 	}
+	putText(frame,intToString(x)+","+intToString(y),Point(x,y+30),1,1,color,1);
+}
 
-	circle(frame,Point(x,y),15,Scalar(0,255,0),1);
-	if(y-25>0)
-		line(frame,Point(x,y),Point(x,y-25),Scalar(0,255,0),1);
-	else line(frame,Point(x,y),Point(x,0),Scalar(0,255,0),1);
-	if(y+25<FRAME_HEIGHT)
-		line(frame,Point(x,y),Point(x,y+25),Scalar(0,255,0),1);
-	else line(frame,Point(x,y),Point(x,FRAME_HEIGHT),Scalar(0,255,0),1);
-	if(x-25>0)
-		line(frame,Point(x,y),Point(x-25,y),Scalar(0,255,0),1);
-	else line(frame,Point(x,y),Point(0,y),Scalar(0,255,0),1);
-	if(x+25<FRAME_WIDTH)
-		line(frame,Point(x,y),Point(x+25,y),Scalar(0,255,0),1);
-	else line(frame,Point(x,y),Point(FRAME_WIDTH,y),Scalar(0,255,0),1);
+int  TransAngle(int x, int y,double &h_spin, double &v_spin)
+{
+	if (x<=0||y<=0)
+		return 0;
 
-	putText(frame,intToString(x)+","+intToString(y),Point(x,y+30),1,1,Scalar(0,255,0),1);
+	double horizontal_move = (double) ACTUAL_WIDTH * (x - FRAME_WIDTH/2)/FRAME_WIDTH;
+	double vertical_move = (double) ACTUAL_HEIGHT * (y - FRAME_HEIGHT/2)/FRAME_HEIGHT;
+	double h_spinR = atan ( horizontal_move / F_LEN );
+	double v_spinR = atan ( vertical_move / F_LEN );
 
+	//double h_spinR = atan ( 2.4 / F_LEN ); // used for test
+	//double v_spinR = atan ( 1.8 / F_LEN );
+
+	//Radian to Angle Conversion
+	h_spin = 90 * h_spinR / M_PI_2;
+	v_spin = 90 * v_spinR / M_PI_2;
+
+	return 1;
 }
 
 
-void initSocket() 
+void initSocket(SOCKET &socketClient)
 {
 	//初始化套接字
 	WSADATA wsaData;
 	WORD wVersion = MAKEWORD(1, 1);
-	::WSAStartup(wVersion, &wsaData);
+	WSAStartup(wVersion, &wsaData);
 	SOCKADDR_IN addrSrv;
-	addrSrv.sin_addr.S_un.S_addr = ::inet_addr("127.0.0.1");
+	addrSrv.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");
 	addrSrv.sin_family = AF_INET;
-	addrSrv.sin_port = ::htons(6000);
+	addrSrv.sin_port = htons(6000);
 
-	socketClient = ::socket(AF_INET, SOCK_STREAM, 0);
-	::connect(socketClient, (SOCKADDR*)&addrSrv, sizeof(SOCKADDR));//连接
+	socketClient = socket(AF_INET, SOCK_STREAM, 0);
+	connect(socketClient, (SOCKADDR*)&addrSrv, sizeof(SOCKADDR));//连接
 
 	//cout<<"初始完毕！准备发送数据！！"<<endl;
 }
