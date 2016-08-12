@@ -15,7 +15,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="MyTest_vtqa.cpp">
+    <ClCompile Include="camtrack_client.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>
