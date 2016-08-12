@@ -1,6 +1,6 @@
 -- Lua Test: linlin camera Tracking Test -
 -- 2016.7.25
--- 2016.8.11 latest update
+-- 2016.8.12 latest update
 
 
 --~ function sleep(n)
@@ -32,17 +32,32 @@ function server()
 	print("Connected. ");
 
 	while true do
-		local hs, vs = 0;
+		local camsend;
+		camsend = c:receive();
 
-		hs = c:receive();
-		vs = c:receive();
-
-		if hs == "end" then
+		if camsend == "end" then
 			break;
-		elseif hs then
-			print( "h ".. hs .. ", v " .. vs);
+		elseif camsend then
+			print(camsend);
 
-			--MA2 spin the light
+		local splitInfo = {};
+		for word in string.gmatch(camsend, '([^,]+)') do
+			table.insert(splitInfo, word);
+		end
+
+		local id = tonumber(splitInfo[1]);
+		local hs = tonumber(splitInfo[2]);
+		local vs = tonumber(splitInfo[3]);
+
+		if id > 2 then
+			vs = -1 * vs;
+		end
+
+		--MA2 spin the light
+--~ 		print('Fixture '..id..' Attribute "Pan" at+ '.. hs);
+--~ 		print('Fixture '..id..' Attribute "Tilt" at+ '.. vs);
+		gma.cmd('Fixture '..id..' Attribute "Pan" at+ '.. hs);
+		gma.cmd('Fixture '..id..' Attribute "Tilt" at+ '.. vs);
 
 --~ 			gma.cmd('Fixture 1 Attribute "Pan" at+ '.. hs);
 --~ 			gma.cmd('Fixture 1 Attribute "Tilt" at+ '.. vs);

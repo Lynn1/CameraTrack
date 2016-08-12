@@ -14,10 +14,12 @@ latest update: August 6,2016
 #pragma comment(lib, "opencv_imgproc249.lib")
 
 #define _USE_MATH_DEFINES
-#include <math.h>  
+#include <math.h>
 
-using namespace std;  
+using namespace std;
 using namespace cv; 
+
+int CAMNUM = 3;
 
 //camera parameter
 //const int F_LEN = 16;	
@@ -26,8 +28,9 @@ const float ACTUAL_WIDTH = 4.8; //4.8mm*3.6mm
 const float ACTUAL_HEIGHT = 3.6;
 const int FRAME_WIDTH = 640;	//default capture width and height
 const int FRAME_HEIGHT = 480;
-const float Cam_Light_D = 13-4;
+//const float Cam_Light_D = 13-4;
 const float Marks_D = 48+5; 
+float CLD_MD[4];
 
 //tracing parameter
 const int MAX_NUM_OBJECTS=50;	//max number of objects to be detected in frame
@@ -47,17 +50,15 @@ int STEPS_MAX = 10;
 int DELAY = 15;
 int DELAY_MAX = 33;
 
-const char* TrackWindowName = "Processed";
-const char* OriginWindowName = "Original";
-
-//as server
+string TrackWinName[4];
+string OriginWinName[4];
+string BarWinName;
 
 //as client
 int serAnser = -1;
 SOCKADDR_IN addrSrv;
 
 void initSocket(SOCKET &socketSrv, SOCKET &socketClient);
-
 void createTrackbars();
 void preprocess(Mat &srcimg, Mat&thresholdImg);
 int  trackObjectTest(int &cx, int &cy, Mat&thresholdImg, Mat &markImg);
@@ -72,6 +73,21 @@ string intToString(int number){
 	stringstream ss;
 	ss << number;
 	return ss.str();
+}
+void initgloable()
+{
+	CLD_MD[0]= 0.169;
+	CLD_MD[1]= 0.04;
+	CLD_MD[2]= 0.16;
+	CLD_MD[3]= 0.169;
+
+	for (int i =0;i<CAMNUM;i++)
+	{
+		TrackWinName[i] = "Processed"+intToString(i+1);
+		OriginWinName[i] = "Original"+intToString(i+1);
+	}
+
+	BarWinName = "Bar";
 }
 static void help()
 {
@@ -130,6 +146,7 @@ void initSocket(SOCKET &socketSrv, SOCKET &socketClient)
 int main()
 { 
 	help();
+	initgloable();
 	createTrackbars();//create slider bars for filtering
 
 	SOCKET socketSrv ;
@@ -139,96 +156,95 @@ int main()
 	int delaySteps =0;
 
 	int delay = 30; 
-	//int delay = 1000; 
 	//char *filename = "D:/linlin/video/5m-15m.mov";
-	char *filename = "D:/linlin/video/4.avi";	
+	//char *filename = "D:/linlin/video/4.avi";	
 
 	//Matrix to store each frame of the camera feed
-	Mat cameraFeed;
+	Mat camFeed[4];
 	//matrix storage for binary threshold image
-	Mat thresholdImg;
-	////x and y values for the location of the object
+	Mat threshImg[4];
+	//x and y values for the location of the object
 	
 	int tarcount=0;
+	
+	VideoCapture cap[4];
+	for (int i =0;i<CAMNUM;i++)
+	{
+		cap[i].open(i+1);
+		if(!cap[i].isOpened())  
+		{  
+			cout<<"Can't open camera"<<i<<endl;
+			return -1;  
+		} 
+		namedWindow(TrackWinName[i]);
+		namedWindow(OriginWinName[i]);
+	}
 
-	namedWindow(TrackWindowName);
-
-	//VideoCapture capture(filename);
-	//const string videoStreamAddress = "rtsp://192.168.1.3:554/ch1/1";   
-
-	VideoCapture capture(1);
 	while(1){
 		delaySteps++;
 		if (DELAY<=0)
 			DELAY=1;
-		//store image to matrix
-		capture.read(cameraFeed);
-		if (!capture.read(cameraFeed))
-		{	
-			cout<<"Can't read cameraFeed!\n";
-			break;
-		}
-		//if (!capture.read(cameraFeed))
-		//{	
-		//	capture = VideoCapture(filename);
-		//	if (!capture.read(cameraFeed))
-		//		break; 
-		//}
-		preprocess(cameraFeed, thresholdImg);
-		//initialize
-		Point obj = Point(0,0);
-		float len =0;
-		Point spot;
-		int tc = trackObject(obj.x, obj.y, len,thresholdImg,cameraFeed);
-		//int tc = trackObjectTest(x,y,thresholdImg,cameraFeed);
-
-		double h_spin=0,v_spin=0;
-		char chs[10];
-		char cvs[10];
-		int dospin = 0;
-		if(1==tc)
+		
+		for (int i =0;i<CAMNUM;i++)
 		{
-			float dy = len * Cam_Light_D / Marks_D ;
-			spot.x = FRAME_WIDTH/2;
-			//spot.y = FRAME_HEIGHT/2;
-			spot.y = FRAME_HEIGHT/2 + (int)dy;
-			drawObject(spot.x,spot.y,cameraFeed,3);
-			dospin = TransAngle(obj,spot,h_spin,v_spin);
-			float hs = (float)h_spin/STEPS; // half step
-			float vs = (float)v_spin/STEPS;
-			//char sSend[128];
-			//sprintf(sSend,"%f %f\n",hs,vs);
-			sprintf(chs,"%f\n",hs);
-			sprintf(cvs,"%f\n",vs);
-			//cout<<"send:"<<hs<<" "<<vs<<" "<<tarcount++<<endl;
-		}
+			if (!cap[i].read(camFeed[i]))//store image to matrix
+			{	
+				cout<<"Can't read camFeed!"<<i<<endl;
+				break;
+			}
 
-		/********Socket*********/
-		//as client:
-		if(0!=serAnser)
-		{
-			cout<<"connecting...\n";
-			serAnser = connect(socketClient, (SOCKADDR*)&addrSrv, sizeof(SOCKADDR));//连接
-			if(!serAnser)
-				cout<<"connected!\n";
-		}
-		if(0==serAnser && 1==dospin && delaySteps%DELAY==0)
-		{
-			send(socketClient, chs, strlen(chs), 0);
-			send(socketClient, cvs, strlen(cvs), 0);
-			cout<<"send:"<<(float)h_spin<<" "<<(float)v_spin<<" "<<tarcount++<<endl;
-			//cout<<"send\n";
-			delaySteps = 0;
-		}
-		//as server:
-		//send(socketClient, chs, strlen(chs), 0);
-		//send(socketClient, cvs, strlen(cvs), 0);
-		//cout<<"send\n";
-		/********Socket*********/
+			preprocess(camFeed[i], threshImg[i]);
 
-		//show frames 
-		imshow(OriginWindowName,cameraFeed);
-		imshow(TrackWindowName,thresholdImg);
+			//initialize
+			Point obj = Point(0,0);
+			float len =0;
+			Point spot;
+			int tc = trackObject(obj.x, obj.y, len,threshImg[i],camFeed[i]);
+			//int tc = trackObjectTest(obj.x, obj.y, threshImg[i],camFeed[i]);
+
+			double h_spin=0,v_spin=0;
+			char chs[10];
+			char cvs[10];
+			int dospin = 0;
+			char sSend[128];
+			if(1==tc)
+			{
+				//float dy = len * Cam_Light_D / Marks_D ;
+				float dy = len * CLD_MD[i];
+				spot.x = FRAME_WIDTH/2;
+				//spot.y = FRAME_HEIGHT/2;
+				spot.y = FRAME_HEIGHT/2 + (int)dy;
+				drawObject(spot.x,spot.y,camFeed[i],3);
+				dospin = TransAngle(obj,spot,h_spin,v_spin);
+				float hs = (float)h_spin/STEPS; // half step
+				float vs = (float)v_spin/STEPS;
+				
+				sprintf(sSend,"%d,%f,%f\n",i+1,hs,vs);//id = i+1
+			}
+
+			/********Socket*********/
+			//as client:
+			if(0!=serAnser)
+			{
+				cout<<"connecting...\n";
+				serAnser = connect(socketClient, (SOCKADDR*)&addrSrv, sizeof(SOCKADDR));//连接
+				if(!serAnser)
+					cout<<"connected!\n";
+			}
+			if(0==serAnser && 1==dospin && delaySteps%DELAY==0)
+			{
+				send(socketClient, sSend, strlen(sSend), 0);
+				//send(socketClient, chs, strlen(chs), 0);
+				//send(socketClient, cvs, strlen(cvs), 0);
+				cout<<tarcount++<<":"<<sSend;
+				delaySteps = 0;
+			}
+			/********Socket*********/
+
+			//show frames 
+			imshow(OriginWinName[i],camFeed[i]);
+			imshow(TrackWinName[i],threshImg[i]);
+		}
 
 		//delay 30ms so that screen can refresh.
 		//image will not appear without this waitKey() command
@@ -239,13 +255,14 @@ int main()
 			break;
 	}
 
-	send(socketClient, "end\n", strlen("end\n"), 0);
 	//清理套接字
+	send(socketClient, "end\n", strlen("end\n"), 0);
 	closesocket(socketClient);
-	//closesocket(socketSrv);
 	WSACleanup();
 
-	capture.release();
+	for (int i =0;i<CAMNUM;i++)
+		cap[i].release();
+
 	destroyAllWindows();
 	return 0;
 }
@@ -253,14 +270,14 @@ int main()
 
 void createTrackbars(){
 	//create window for trackbars
-	namedWindow(TrackWindowName);
-	createTrackbar( "V_MIN", TrackWindowName, &V_MIN, V_MAX, on_trackbar );
-	createTrackbar( "V_MAX", TrackWindowName, &V_MAX, V_MAX, on_trackbar );
-	//createTrackbar("S_Diff", TrackWindowName, &S_Diff, S_Diff_MAX, on_trackbar );
-	createTrackbar( "ParalErr", TrackWindowName, &D_Diff, D_Diff_MAX, on_trackbar );
-	createTrackbar( "AreaErr", TrackWindowName, &AREADIFF, AREADIFF_MAX, on_trackbar );
-	createTrackbar( "Delay", TrackWindowName, &DELAY, DELAY_MAX, on_trackbar );
-	createTrackbar( "Steps", TrackWindowName, &STEPS, STEPS_MAX, on_trackbar );
+	namedWindow(BarWinName);
+	createTrackbar( "V_MIN", BarWinName, &V_MIN, V_MAX, on_trackbar );
+	createTrackbar( "V_MAX", BarWinName, &V_MAX, V_MAX, on_trackbar );
+	//createTrackbar("S_Diff", BarWinName, &S_Diff, S_Diff_MAX, on_trackbar );
+	createTrackbar( "ParalErr", BarWinName, &D_Diff, D_Diff_MAX, on_trackbar );
+	createTrackbar( "AreaErr", BarWinName, &AREADIFF, AREADIFF_MAX, on_trackbar );
+	createTrackbar( "Delay", BarWinName, &DELAY, DELAY_MAX, on_trackbar );
+	createTrackbar( "Steps", BarWinName, &STEPS, STEPS_MAX, on_trackbar );
 }
 
 
@@ -273,18 +290,12 @@ void preprocess(Mat &srcimg, Mat&thresholdImg)
 	inRange(thresholdImg,Scalar(V_MIN),Scalar(V_MAX),thresholdImg);
 	//create structuring element that will be used to "dilate" and "erode" image.
 	//the element chosen here is a 3px by 3px rectangle
-	
-	//Mat pyr;
-	//pyrDown(thresholdImg,pyr);
-	////dilate(pyr,pyr,0,1);
-	//pyrUp(pyr,thresholdImg);
 
 	Mat erodeElement = getStructuringElement( MORPH_ELLIPSE,Size(3,3));//MORPH_RECT
 	//dilate with larger element so make sure object is nicely visible
 	Mat dilateElement = getStructuringElement( MORPH_ELLIPSE,Size(15,15));
 
 	erode(thresholdImg,thresholdImg,erodeElement);
-	//erode(thresholdImg,thresholdImg,erodeElement);
 	//erode(thresholdImg,thresholdImg,erodeElement);
 	//erode(thresholdImg,thresholdImg,erodeElement);
 	dilate(thresholdImg,thresholdImg,dilateElement);
