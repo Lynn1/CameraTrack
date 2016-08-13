@@ -19,7 +19,7 @@ latest update: August 6,2016
 using namespace std;
 using namespace cv; 
 
-int CAMNUM = 3;
+int CAMNUM = 3;//number of cameras
 
 //camera parameter
 //const int F_LEN = 16;	
@@ -30,7 +30,7 @@ const int FRAME_WIDTH = 640;	//default capture width and height
 const int FRAME_HEIGHT = 480;
 //const float Cam_Light_D = 13-4;
 const float Marks_D = 48+5; 
-float CLD_MD[4];
+float CLD_MD[4]; 
 
 //tracing parameter
 const int MAX_NUM_OBJECTS=50;	//max number of objects to be detected in frame

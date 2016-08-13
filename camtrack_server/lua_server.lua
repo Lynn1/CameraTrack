@@ -1,6 +1,6 @@
 -- Lua Test: linlin camera Tracking Test -
--- 2016.7.25
--- 2016.8.12 latest update
+-- Jul 26, 2016
+-- Aug 12, 2016 latest update
 
 
 --~ function sleep(n)
@@ -13,7 +13,7 @@
 
 
 function server()
-	local clock = os.clock();
+	--local clock = os.clock();
 
 
 	-- name for the host and port
