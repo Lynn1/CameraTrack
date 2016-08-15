@@ -1,20 +1,53 @@
 --test for Cue
 --linlin Aug 13, 2016
+--latest update Aug 15,2016
 
 
 --time nod
-local time1 = 2
-local time2 = 3.125;
-local time3 = 4.25;
-local time4 = 5.375;
-local time5 = 7.5;
-local time6 = 8.5;
+local timenod = {};
+local cuename = {};
+local CUECOUNT = 17;
 
-local time7 = 10;
-local time8 = 15;
-local time9 = 20;
+function init()
+	table.insert(timenod,0);      --1
+	table.insert(cuename,"Cue 1");
+	table.insert(timenod,3.50);   --2
+	table.insert(cuename,"Cue 2");
+	table.insert(timenod,8.80);   --3
+	table.insert(cuename,"Cue 3");
+	table.insert(timenod,20.07);  --4
+	table.insert(cuename,"Cue 4");
+	table.insert(timenod,28.03);  --5
+	table.insert(cuename,"Cue 5");
+	table.insert(timenod,34.04);  --6
+	table.insert(cuename,"Cue 6");
+	table.insert(timenod,37.97);  --7
+	table.insert(cuename,"Cue 7");
+	table.insert(timenod,48.73);  --8
+	table.insert(cuename,"Cue 8");
+	table.insert(timenod,54.03);  --9
+	table.insert(cuename,"Cue 9");
+	table.insert(timenod,59.30);  --10
+	table.insert(cuename,"Cue 11");
+	table.insert(timenod,64.63);  --11
+	table.insert(cuename,"Cue 12");
+	table.insert(timenod,70);     --12
+	table.insert(cuename,"Cue 13");
+	table.insert(timenod,73.60);  --13
+	table.insert(cuename,"Cue 13.4");
+	table.insert(timenod,80.73);  --14
+	table.insert(cuename,"Cue 13.5");
+	table.insert(timenod,83.73);  --15
+	table.insert(cuename,"Cue 13.6");
+	table.insert(timenod,91.30);  --16
+	table.insert(cuename,"Cue 14");
+	table.insert(timenod,102);    --17
+	table.insert(cuename,"Cue 15");
+end
 
 function callCue()
+
+	init();
 
 	local host = host or "localhost";
 	local port = port or 7000;
@@ -35,43 +68,15 @@ function callCue()
 
 	print ("Ready to callCue.");
 	local t0 = os.clock();
-	local step=0 ;
-	while(true)do
-
-		if os.clock() - t0 >= time1 and step==0 then
-			print ("cue 1");
-			gma.cmd('Goto Cue 1');
-			step = step + 1 ;
+	local i = 1;
+	while(i<=CUECOUNT)do
+		print(os.clock() - t0);
+		print(timenod[i]);
+		if os.clock() - t0 >= timenod[i] then
+			print (cuename[i]);
+			gma.cmd('Goto '..cuename[i]);
+			i = i + 1;
 		end
-
-		if os.clock() - t0 >= time2 and step==1 then
-			print ("cue 2");
-			gma.cmd('Goto Cue 2');
-			step = step + 1 ;
-		end
-
-		if os.clock() - t0 >= time3 and step==2 then
-			print ("cue 3");
-			gma.cmd('Goto Cue 3');
-			step = step + 1 ;
-		end
-
-		if os.clock() - t0 >= time4 and step==3 then
-			print ("cue 4");
-			gma.cmd('Goto Cue 4');
-			step = step + 1 ;
-		end
-
-		if os.clock() - t0 >= time5 and step==4 then
-			print ("cue 5");
-			gma.cmd('Goto Cue 5');
-			step = step + 1 ;
-		end
-
-		if os.clock() - t0 >= time6 and step==5 then
-			break;
-		end
-
 	end
 
 	print ("End.");

@@ -4,7 +4,7 @@
 
 
 function playMusic()
-	local host = host or "*";
+	local host = host or "localhost";
 	local port = port or 7000;
 
 	local socket = require("socket");
@@ -19,7 +19,10 @@ function playMusic()
 	s:close();
 	print ("Ready to paly.");
 
-	os.execute([[""C:\Program Files (x86)\The KMPlayer\KMPlayer.exe" "D:\linlin\test.mp3""]]);
+--~ 	local path = [[""%ProgramFiles(x86)%\Windows Media Player\wmplayer.exe" "D:\linlin\test2.mp3""]];
+	local path = [[""%ProgramFiles(x86)%\The KMPlayer\KMPlayer.exe" "D:\linlin\test2.mp3""]];
+
+	os.execute(path);
 
 end
 

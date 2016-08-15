@@ -7,6 +7,7 @@ latest update: August 6,2016
 #include <Winsock2.h>
 #pragma comment(lib, "Ws2_32.lib")
 
+#include "opencv2/opencv.hpp"
 #include <opencv\highgui.h>
 #include <opencv\cv.h>
 #pragma comment(lib, "opencv_highgui249.lib")
@@ -19,7 +20,7 @@ latest update: August 6,2016
 using namespace std;
 using namespace cv; 
 
-int CAMNUM = 3;//number of cameras
+int CAMNUM = 1;//number of cameras
 
 //camera parameter
 //const int F_LEN = 16;	
@@ -65,6 +66,7 @@ int  trackObjectTest(int &cx, int &cy, Mat&thresholdImg, Mat &markImg);
 int  trackObject(int &cx, int &cy, float &len, Mat&thresholdImg, Mat &markImg);
 void drawObject(int x, int y,Mat &frame,int flag =0);
 int  TransAngle(Point obj, Point tar, double &h_spin, double &v_spin);
+void MultiImage_OneWin(const string& MultiShow_WinName, const vector<Mat>& SrcImg_V, CvSize SubPlot, CvSize ImgMax_Size);
 void on_trackbar( int, void* )
 {
 	//This function gets called whenever a trackbar position is changed
@@ -88,20 +90,20 @@ void initgloable()
 	}
 
 	BarWinName = "Bar";
+	BarWinName = TrackWinName[0];
 }
 static void help()
 {
 	cout << "\nThis is a test program for tracking quadrotor.(by Lin Lin July, 2016)\n";
 
 	cout << "\n\nHot keys: \n"
-		"\tESC - quit the program\n"
-		"\tspace - pause video\n\n"
-		"Trackbar:\n"
+		"\tESC - quit the program(when the image window is active window)\n\n"
+		"Trackbar Parameters:\n"
 		"\tV_MIN & V_MAX: filter image between Gray Value (V_MIN, V_MAX)\n"
-		"\tS_Diff:  acceptable slope difference between parallel lines,\n"
-		"\t\t1(0.05) ~ 2(0.1) recommended.\n"
-		"\tDst_Diff: acceptable distance difference between parallel lines,\n"
-		"\t\t20 recommended.\n";
+		"\tParalErr: acceptable distance difference between parallel lines,20 recommended.\n"
+		"\tAreaErr: acceptable area difference between two corner points.\n";
+		"\tDelay: Delay*30ms is the least time delay between two spin command.\n";
+		"\tSteps: how many steps does the pink center need to catch up the blue target.\n";
 }
 
 void initSocket(SOCKET &socketSrv, SOCKET &socketClient)
@@ -114,18 +116,10 @@ void initSocket(SOCKET &socketSrv, SOCKET &socketClient)
 	socketSrv = socket(AF_INET, SOCK_STREAM, 0);
 
 	//as client:
-	addrSrv.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");//   192.168.1.2  
-	//as server:
-	//SOCKADDR_IN addrSrv;
-	//addrSrv.sin_addr.S_un.S_addr = htonl(INADDR_ANY);//server
+	addrSrv.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");// localhost
 
 	addrSrv.sin_family = AF_INET;
 	addrSrv.sin_port = htons(6000);
-
-	//绑定-server
-	//bind(socketSrv, (SOCKADDR*)&addrSrv, sizeof(SOCKADDR));
-	//监听-server
-	//listen(socketSrv, 3);
 
 	cout<<"waiting for connection..."<<endl;
 
@@ -135,11 +129,6 @@ void initSocket(SOCKET &socketSrv, SOCKET &socketClient)
 	serAnser = connect(socketClient, (SOCKADDR*)&addrSrv, sizeof(SOCKADDR));//连接
 	if(!serAnser)
 		cout<<"connected!\n";
-
-	//as server:
-	//SOCKADDR_IN addrClient;
-	//int nLen = sizeof(SOCKADDR);
-	//socketClient = accept(socketSrv, (SOCKADDR*)&addrClient, &nLen);
 }
 
 
@@ -152,25 +141,14 @@ int main()
 	SOCKET socketSrv ;
 	SOCKET socketClient;
 	initSocket(socketSrv,socketClient);
-		
-	int delaySteps =0;
 
-	int delay = 30; 
 	//char *filename = "D:/linlin/video/5m-15m.mov";
 	//char *filename = "D:/linlin/video/4.avi";	
-
-	//Matrix to store each frame of the camera feed
-	Mat camFeed[4];
-	//matrix storage for binary threshold image
-	Mat threshImg[4];
-	//x and y values for the location of the object
-	
-	int tarcount=0;
 	
 	VideoCapture cap[4];
 	for (int i =0;i<CAMNUM;i++)
 	{
-		cap[i].open(i+1);
+		cap[i].open(i);//notice
 		if(!cap[i].isOpened())  
 		{  
 			cout<<"Can't open camera"<<i<<endl;
@@ -179,8 +157,24 @@ int main()
 		namedWindow(TrackWinName[i]);
 		namedWindow(OriginWinName[i]);
 	}
+	//namedWindow(OriginWinName[0], CV_WINDOW_AUTOSIZE);
+	//namedWindow(TrackWinName[0], CV_WINDOW_AUTOSIZE);
+	
+	int wait = 0;
+	int delay = 30; 
+	int delaySteps =0;
+	bool failed = false;
+	int tarcount=0;
 
-	while(1){
+	vector<Mat> camFeed(4);   //matrix to store each frame of the camera feed
+	vector<Mat> threshImg(4); //matrix storage for binary threshold image
+
+	while(1)
+	{
+		int usr = waitKey (delay);//delay 30ms so that the screen can refresh
+		if(usr==27) //"ESC"
+			break;
+
 		delaySteps++;
 		if (DELAY<=0)
 			DELAY=1;
@@ -190,6 +184,7 @@ int main()
 			if (!cap[i].read(camFeed[i]))//store image to matrix
 			{	
 				cout<<"Can't read camFeed!"<<i<<endl;
+				failed = true ; 
 				break;
 			}
 
@@ -219,7 +214,10 @@ int main()
 				float hs = (float)h_spin/STEPS; // half step
 				float vs = (float)v_spin/STEPS;
 				
-				sprintf(sSend,"%d,%f,%f\n",i+1,hs,vs);//id = i+1
+				int lightID=i+1;
+				if(2==i+1)
+					lightID=4;
+				sprintf(sSend,"%d,%f,%f\n",lightID,hs,vs);//id = i+1
 			}
 
 			/********Socket*********/
@@ -234,24 +232,20 @@ int main()
 			if(0==serAnser && 1==dospin && delaySteps%DELAY==0)
 			{
 				send(socketClient, sSend, strlen(sSend), 0);
-				//send(socketClient, chs, strlen(chs), 0);
-				//send(socketClient, cvs, strlen(cvs), 0);
-				cout<<tarcount++<<":"<<sSend;
+				//cout<<tarcount++<<":"<<sSend;
 				delaySteps = 0;
 			}
+			else
+				send(socketClient, "no\n", strlen("no\n"), 0);
 			/********Socket*********/
 
 			//show frames 
 			imshow(OriginWinName[i],camFeed[i]);
 			imshow(TrackWinName[i],threshImg[i]);
 		}
-
-		//delay 30ms so that screen can refresh.
-		//image will not appear without this waitKey() command
-		int usr = waitKey (delay);
-		if(delay>=0&&usr==32) //"Space"
-			waitKey(0);
-		else if (usr==27) //"ESC"
+		//MultiImage_OneWin(OriginWinName[0], camFeed, cvSize(2, 2), cvSize(320,240));  
+		//MultiImage_OneWin(TrackWinName[0], threshImg, cvSize(2, 2), cvSize(320,240));
+		if(failed)
 			break;
 	}
 
@@ -262,7 +256,6 @@ int main()
 
 	for (int i =0;i<CAMNUM;i++)
 		cap[i].release();
-
 	destroyAllWindows();
 	return 0;
 }
@@ -270,7 +263,7 @@ int main()
 
 void createTrackbars(){
 	//create window for trackbars
-	namedWindow(BarWinName);
+	namedWindow(BarWinName);//CV_WINDOW_NORMAL
 	createTrackbar( "V_MIN", BarWinName, &V_MIN, V_MAX, on_trackbar );
 	createTrackbar( "V_MAX", BarWinName, &V_MAX, V_MAX, on_trackbar );
 	//createTrackbar("S_Diff", BarWinName, &S_Diff, S_Diff_MAX, on_trackbar );
@@ -575,4 +568,69 @@ int  TransAngle(Point obj, Point tar, double &h_spin, double &v_spin)
 	v_spin = 90 * v_spinR / M_PI_2;
 
 	return 1;
+}
+
+
+void MultiImage_OneWin(const string& MultiShow_WinName, const vector<Mat>& SrcImg_V, CvSize SubPlot, CvSize ImgMax_Size)
+{
+	//Window's image
+	Mat Disp_Img;
+	//Width of source image
+	CvSize Img_OrigSize = cvSize(SrcImg_V[0].cols, SrcImg_V[0].rows);
+	//******************** Set the width for displayed image ********************//
+	//Width vs height ratio of source image
+	float WH_Ratio_Orig = Img_OrigSize.width/(float)Img_OrigSize.height;
+	CvSize ImgDisp_Size = cvSize(100, 100);
+	if(Img_OrigSize.width > ImgMax_Size.width)
+		ImgDisp_Size = cvSize(ImgMax_Size.width, (int)ImgMax_Size.width/WH_Ratio_Orig);
+	else if(Img_OrigSize.height > ImgMax_Size.height)
+		ImgDisp_Size = cvSize((int)ImgMax_Size.height*WH_Ratio_Orig, ImgMax_Size.height);
+	else
+		ImgDisp_Size = cvSize(Img_OrigSize.width, Img_OrigSize.height);
+	//******************** Check Image numbers with Subplot layout ********************//
+	int Img_Num = (int)SrcImg_V.size();
+	if(Img_Num > SubPlot.width * SubPlot.height)
+	{
+		cout<<"Your SubPlot Setting is too small !"<<endl;
+		exit(0);
+	}
+	//******************** Blank setting ********************//
+	CvSize DispBlank_Edge = cvSize(80, 60);
+	CvSize DispBlank_Gap  = cvSize(15, 15);
+	//******************** Size for Window ********************//
+	Disp_Img.create(Size(ImgDisp_Size.width*SubPlot.width + DispBlank_Edge.width + (SubPlot.width - 1)*DispBlank_Gap.width, 
+		ImgDisp_Size.height*SubPlot.height + DispBlank_Edge.height + (SubPlot.height - 1)*DispBlank_Gap.height), CV_8UC3);
+	Disp_Img.setTo(0);//Background
+	//Left top position for each image
+	int EdgeBlank_X = (Disp_Img.cols - (ImgDisp_Size.width*SubPlot.width + (SubPlot.width - 1)*DispBlank_Gap.width))/2;
+	int EdgeBlank_Y = (Disp_Img.rows - (ImgDisp_Size.height*SubPlot.height + (SubPlot.height - 1)*DispBlank_Gap.height))/2;
+	CvPoint LT_BasePos = cvPoint(EdgeBlank_X, EdgeBlank_Y);
+	CvPoint LT_Pos = LT_BasePos;
+
+	//Display all images
+	for (int i=0; i < Img_Num; i++)
+	{
+		//Obtain the left top position
+		if ((i%SubPlot.width == 0) && (LT_Pos.x != LT_BasePos.x))
+		{
+			LT_Pos.x = LT_BasePos.x;
+			LT_Pos.y += (DispBlank_Gap.height + ImgDisp_Size.height);
+		}
+		//Writting each to Window's Image
+		Mat imgROI = Disp_Img(Rect(LT_Pos.x, LT_Pos.y, ImgDisp_Size.width, ImgDisp_Size.height));
+		resize(SrcImg_V[i], imgROI, Size(ImgDisp_Size.width, ImgDisp_Size.height));
+
+		LT_Pos.x += (DispBlank_Gap.width + ImgDisp_Size.width);
+	}
+
+	//Get the screen size of computer
+	int Scree_W = GetSystemMetrics(SM_CXSCREEN);
+	int Scree_H = GetSystemMetrics(SM_CYSCREEN);
+
+	//cvNamedWindow(MultiShow_WinName.c_str(), CV_WINDOW_AUTOSIZE);
+	//cvMoveWindow(MultiShow_WinName.c_str(),(Scree_W - Disp_Img.cols)/2 ,(Scree_H - Disp_Img.rows)/2);//Centralize the window
+	//cvShowImage(MultiShow_WinName.c_str(), &(IplImage(Disp_Img)));
+	imshow(MultiShow_WinName, Disp_Img);
+	//cvWaitKey(0);
+	//cvDestroyWindow(MultiShow_WinName.c_str());
 }
