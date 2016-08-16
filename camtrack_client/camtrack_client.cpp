@@ -20,35 +20,40 @@ latest update: August 6,2016
 using namespace std;
 using namespace cv; 
 
-int CAMNUM = 1;//number of cameras
+int CAMNUM = 4;//number of cameras
 
 //camera parameter
 //const int F_LEN = 16;	
 const int F_LEN = 12;	//focal length = 16mm
 const float ACTUAL_WIDTH = 4.8; //4.8mm*3.6mm
 const float ACTUAL_HEIGHT = 3.6;
-const int FRAME_WIDTH = 640;	//default capture width and height
-const int FRAME_HEIGHT = 480;
+//const int FRAME_WIDTH = 640;	//default capture width and height
+//const int FRAME_HEIGHT = 480;
+
+const int FRAME_WIDTH = 704; //after USB-DVR compress
+const int FRAME_HEIGHT = 576;
+
 //const float Cam_Light_D = 13-4;
-const float Marks_D = 48+5; 
-float CLD_MD[4]; 
+//const float Marks_D = 48+5; 
+float OFFSET_V[4]; 
+float OFFSET_H[4];
 
 //tracing parameter
 const int MAX_NUM_OBJECTS=50;	//max number of objects to be detected in frame
 const int MIN_OBJECT_AREA = 5*5;	//minimum and maximum object area
 const int MAX_OBJECT_AREA = FRAME_HEIGHT*FRAME_WIDTH/1.5;
 
-int V_MIN = 255;
+int V_MIN = 200;
 int V_MAX = 256;
 //int S_Diff = 2;		//acceptable slope difference between parallel lines
 //int S_Diff_MAX = 20;
-int D_Diff = 1;	//acceptable distance difference between parallel lines
+int D_Diff = 5;	//acceptable distance difference between parallel lines
 int D_Diff_MAX = 100;
 int AREADIFF = 10;
 int AREADIFF_MAX = 100;
 int STEPS = 1;
 int STEPS_MAX = 10;
-int DELAY = 15;
+int DELAY = 7;
 int DELAY_MAX = 33;
 
 string TrackWinName[4];
@@ -78,10 +83,16 @@ string intToString(int number){
 }
 void initgloable()
 {
-	CLD_MD[0]= 0.169;
-	CLD_MD[1]= 0.04;
-	CLD_MD[2]= 0.16;
-	CLD_MD[3]= 0.169;
+	//offset = realoffset/reallens , offset * pixellens = pixeloffset
+	OFFSET_V[0]= 0.4;
+	OFFSET_V[1]= 0.00;
+	OFFSET_V[2]= 0.3;
+	OFFSET_V[3]= 0.1;
+
+	//OFFSET_H[0]= -0.4;
+	//OFFSET_H[1]= 0.04;
+	//OFFSET_H[2]= 0.16;
+	//OFFSET_H[3]= 0.169;
 
 	for (int i =0;i<CAMNUM;i++)
 	{
@@ -116,7 +127,7 @@ void initSocket(SOCKET &socketSrv, SOCKET &socketClient)
 	socketSrv = socket(AF_INET, SOCK_STREAM, 0);
 
 	//as client:
-	addrSrv.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");// localhost
+	addrSrv.sin_addr.S_un.S_addr = inet_addr("192.168.1.2");// localhost 127.0.0.1
 
 	addrSrv.sin_family = AF_INET;
 	addrSrv.sin_port = htons(6000);
@@ -148,7 +159,10 @@ int main()
 	VideoCapture cap[4];
 	for (int i =0;i<CAMNUM;i++)
 	{
-		cap[i].open(i);//notice
+		cap[i].open(i+1);//notice
+		cap[i].set(CV_CAP_PROP_FRAME_WIDTH, FRAME_WIDTH);
+		cap[i].set(CV_CAP_PROP_FRAME_HEIGHT, FRAME_HEIGHT);
+
 		if(!cap[i].isOpened())  
 		{  
 			cout<<"Can't open camera"<<i<<endl;
@@ -205,7 +219,8 @@ int main()
 			if(1==tc)
 			{
 				//float dy = len * Cam_Light_D / Marks_D ;
-				float dy = len * CLD_MD[i];
+				//float dx = len * OFFSET_H[i];
+				float dy = len * OFFSET_V[i];
 				spot.x = FRAME_WIDTH/2;
 				//spot.y = FRAME_HEIGHT/2;
 				spot.y = FRAME_HEIGHT/2 + (int)dy;
@@ -215,8 +230,8 @@ int main()
 				float vs = (float)v_spin/STEPS;
 				
 				int lightID=i+1;
-				if(2==i+1)
-					lightID=4;
+				// check this after you pull out your usb
+				
 				sprintf(sSend,"%d,%f,%f\n",lightID,hs,vs);//id = i+1
 			}
 

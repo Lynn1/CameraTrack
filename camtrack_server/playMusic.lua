@@ -19,8 +19,8 @@ function playMusic()
 	s:close();
 	print ("Ready to paly.");
 
---~ 	local path = [[""%ProgramFiles(x86)%\Windows Media Player\wmplayer.exe" "D:\linlin\test2.mp3""]];
-	local path = [[""%ProgramFiles(x86)%\The KMPlayer\KMPlayer.exe" "D:\linlin\test2.mp3""]];
+	local path = [[""%ProgramFiles(x86)%\Windows Media Player\wmplayer.exe" "E:\test2.mp3""]];
+--~ 	local path = [[""%ProgramFiles(x86)%\The KMPlayer\KMPlayer.exe" "D:\linlin\test2.mp3""]];
 
 	os.execute(path);
 

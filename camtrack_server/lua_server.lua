@@ -102,8 +102,13 @@ function server()
 		--Cue message
 		if i<=CUECOUNT then
 			if os.clock() - t0 >= timenod[i] then
-				print (cuename[i]);
---~ 				gma.cmd('Goto '..cuename[i]);
+				if i < 2 then
+					print (cuename[i]);
+					gma.cmd('Goto '..cuename[i]);
+				else
+					gma.cmd('Go ');
+				end
+
 				i = i + 1;
 			end
 		end
@@ -127,15 +132,15 @@ function server()
 			local hs = tonumber(splitInfo[2]);
 			local vs = tonumber(splitInfo[3]);
 
-			if id > 2 then
-				vs = -1 * vs;
-			end
+--~ 			if id > 2 then
+--~ 				vs = -1 * vs;
+--~ 			end
 
 			--MA2 spin the light
 			print('Fixture '..id..' Attribute "Pan" at+ '.. hs);
 			print('Fixture '..id..' Attribute "Tilt" at+ '.. vs);
---~ 			gma.cmd('Fixture '..id..' Attribute "Pan" at+ '.. hs);
---~ 			gma.cmd('Fixture '..id..' Attribute "Tilt" at+ '.. vs);
+			gma.cmd('Fixture '..id..' Attribute "Pan" at+ '.. hs);
+			gma.cmd('Fixture '..id..' Attribute "Tilt" at+ '.. vs);
 
 		end
 	end
