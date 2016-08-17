@@ -13,7 +13,7 @@
 --time nod
 local timenod = {};
 local cuename = {};
-local CUECOUNT = 17;
+local CUECOUNT = 21;
 
 function inittimenod()
 	table.insert(timenod,0);      --1
@@ -40,15 +40,23 @@ function inittimenod()
 	table.insert(cuename,"Cue 12");
 	table.insert(timenod,70);     --12
 	table.insert(cuename,"Cue 13");
-	table.insert(timenod,73.60);  --13
+	table.insert(timenod,70.03);  --13
 	table.insert(cuename,"Cue 13.4");
-	table.insert(timenod,80.73);  --14
+	table.insert(timenod,75.30);  --14
 	table.insert(cuename,"Cue 13.5");
-	table.insert(timenod,83.73);  --15
+	table.insert(timenod,75.33);  --15
 	table.insert(cuename,"Cue 13.6");
-	table.insert(timenod,91.30);  --16
+	table.insert(timenod,80.73);  --16
+	table.insert(cuename,"Cue 13.65");
+	table.insert(timenod,80.77);    --17
+	table.insert(cuename,"Cue 13.66");
+	table.insert(timenod,86.10);    --18
+	table.insert(cuename,"Cue 13.75");
+	table.insert(timenod,86.13);    --19
+	table.insert(cuename,"Cue 13.76");
+	table.insert(timenod,91.30);    --20
 	table.insert(cuename,"Cue 14");
-	table.insert(timenod,102);    --17
+	table.insert(timenod,102);    --21
 	table.insert(cuename,"Cue 15");
 end
 

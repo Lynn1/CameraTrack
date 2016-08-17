@@ -43,17 +43,17 @@ const int MAX_NUM_OBJECTS=50;	//max number of objects to be detected in frame
 const int MIN_OBJECT_AREA = 5*5;	//minimum and maximum object area
 const int MAX_OBJECT_AREA = FRAME_HEIGHT*FRAME_WIDTH/1.5;
 
-int V_MIN = 200;
+int V_MIN = 180;
 int V_MAX = 256;
 //int S_Diff = 2;		//acceptable slope difference between parallel lines
 //int S_Diff_MAX = 20;
-int D_Diff = 5;	//acceptable distance difference between parallel lines
+int D_Diff = 10;	//acceptable distance difference between parallel lines
 int D_Diff_MAX = 100;
-int AREADIFF = 10;
+int AREADIFF = 15;
 int AREADIFF_MAX = 100;
 int STEPS = 1;
 int STEPS_MAX = 10;
-int DELAY = 7;
+int DELAY = 6;
 int DELAY_MAX = 33;
 
 string TrackWinName[4];
@@ -180,6 +180,8 @@ int main()
 	bool failed = false;
 	int tarcount=0;
 
+	int framecount=0;
+
 	vector<Mat> camFeed(4);   //matrix to store each frame of the camera feed
 	vector<Mat> threshImg(4); //matrix storage for binary threshold image
 
@@ -188,7 +190,7 @@ int main()
 		int usr = waitKey (delay);//delay 30ms so that the screen can refresh
 		if(usr==27) //"ESC"
 			break;
-
+		framecount++;
 		delaySteps++;
 		if (DELAY<=0)
 			DELAY=1;
@@ -247,11 +249,18 @@ int main()
 			if(0==serAnser && 1==dospin && delaySteps%DELAY==0)
 			{
 				send(socketClient, sSend, strlen(sSend), 0);
-				//cout<<tarcount++<<":"<<sSend;
+				cout<<tarcount++<<":"<<sSend;
 				delaySteps = 0;
 			}
-			else
-				send(socketClient, "no\n", strlen("no\n"), 0);
+			else 
+			{
+				if(framecount%6==0)
+				{
+					char emptyInfo[20] = "no\n";
+					send(socketClient, emptyInfo, strlen(emptyInfo), 0);
+					framecount=0;
+				}
+			}
 			/********Socket*********/
 
 			//show frames 

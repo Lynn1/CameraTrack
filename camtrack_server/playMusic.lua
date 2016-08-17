@@ -2,8 +2,9 @@
 
 
 
-
+--server
 function playMusic()
+
 	local host = host or "localhost";
 	local port = port or 7000;
 
