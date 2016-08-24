@@ -35,8 +35,14 @@ const int FRAME_HEIGHT = 576;
 
 //const float Cam_Light_D = 13-4;
 //const float Marks_D = 48+5; 
-float OFFSET_V[4]; 
-float OFFSET_H[4];
+
+float facA[4];
+float facB[4];
+float facC[4];
+float facD[4];
+
+int offsetv = 50;
+int offseth = 50;
 
 //tracing parameter
 const int MAX_NUM_OBJECTS=50;	//max number of objects to be detected in frame
@@ -83,16 +89,35 @@ string intToString(int number){
 }
 void initgloable()
 {
-	//offset = realoffset/reallens , offset * pixellens = pixeloffset
-	OFFSET_V[0]= 0.4;
-	OFFSET_V[1]= 0.00;
-	OFFSET_V[2]= 0.3;
-	OFFSET_V[3]= 0.1;
+	//light center offseth = len * facA + facB;
+	//light center offsetv = len * facC + facD;
+	//use offsetv and offseth trackbar to get offset value twice,
+	//so that we can calculate the facA and facB 
 
-	//OFFSET_H[0]= -0.4;
-	//OFFSET_H[1]= 0.04;
-	//OFFSET_H[2]= 0.16;
-	//OFFSET_H[3]= 0.169;
+	//light 1
+	facA[0] = (float)4/17;
+	facB[0] = (float)-38/17;
+	facC[0] = (float)5/17;
+	facD[0] = (float)-379/17;
+
+	//light 2
+	facA[1] = (float)1/7;
+	facB[1] = (float)-32;
+	facC[1] = (float)0.25;
+	facD[1] = (float)10.5;
+
+	//light 3
+	facA[2] = (float)-2/41;
+	facB[2] = (float)-545/41;
+	facC[2] = (float)12/41;
+	facD[2] = (float)-1035/41;
+
+	//light 4
+	facA[3] = (float)1/29;
+	facB[3] = (float)-5;
+	facC[3] = (float)13/29;
+	facD[3] = (float)-24;
+
 
 	for (int i =0;i<CAMNUM;i++)
 	{
@@ -154,7 +179,6 @@ int main()
 	initSocket(socketSrv,socketClient);
 
 	//char *filename = "D:/linlin/video/5m-15m.mov";
-	//char *filename = "D:/linlin/video/4.avi";	
 	
 	VideoCapture cap[4];
 	for (int i =0;i<CAMNUM;i++)
@@ -220,24 +244,33 @@ int main()
 			char sSend[128];
 			if(1==tc)
 			{
-				//float dy = len * Cam_Light_D / Marks_D ;
-				//float dx = len * OFFSET_H[i];
-				float dy = len * OFFSET_V[i];
-				spot.x = FRAME_WIDTH/2;
+				//use offsetv and offseth trackbar to get offset value twice,
+				//so that we can calculate the facA and facB 
+				//int dx = offseth - 50 ;
+				//int dy = offsetv - 50 ;
+				//cout <<i+1<<" len:"<<len<<endl;
+
+				float dx = facA[i] * len + facB[i];
+				float dy = facC[i] * len + facD[i];
+				
+				//spot.x = FRAME_WIDTH/2;
+				spot.x = FRAME_WIDTH/2 + dx;
 				//spot.y = FRAME_HEIGHT/2;
-				spot.y = FRAME_HEIGHT/2 + (int)dy;
+				spot.y = FRAME_HEIGHT/2 + dy;
 				drawObject(spot.x,spot.y,camFeed[i],3);
 				dospin = TransAngle(obj,spot,h_spin,v_spin);
 				float hs = (float)h_spin/STEPS; // half step
 				float vs = (float)v_spin/STEPS;
 				
 				int lightID=i+1;
+				if (1==lightID||4==lightID)
+					vs = -vs;
 				// check this after you pull out your usb
 				
 				sprintf(sSend,"%d,%f,%f\n",lightID,hs,vs);//id = i+1
 			}
 
-			/********Socket*********/
+			///********Socket*********/
 			//as client:
 			if(0!=serAnser)
 			{
@@ -261,7 +294,7 @@ int main()
 					framecount=0;
 				}
 			}
-			/********Socket*********/
+			///********Socket*********/
 
 			//show frames 
 			imshow(OriginWinName[i],camFeed[i]);
@@ -295,6 +328,12 @@ void createTrackbars(){
 	createTrackbar( "AreaErr", BarWinName, &AREADIFF, AREADIFF_MAX, on_trackbar );
 	createTrackbar( "Delay", BarWinName, &DELAY, DELAY_MAX, on_trackbar );
 	createTrackbar( "Steps", BarWinName, &STEPS, STEPS_MAX, on_trackbar );
+
+	//use offsetv and offseth trackbar to get offset value twice,
+	//so that we can calculate the facA and facB 
+
+	//createTrackbar( "OffH", BarWinName, &offseth, 100, on_trackbar );
+	//createTrackbar( "OffV", BarWinName, &offsetv, 100, on_trackbar );
 }
 
 
