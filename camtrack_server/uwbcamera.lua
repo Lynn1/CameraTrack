@@ -1,6 +1,6 @@
--- Lua Test: linlin camera tracking & Ian uwb tracking combine Test -
+-- Lua Test: camera tracking &  uwb tracking combine Test - linlin
 -- Jul 26, 2016
--- Aug 24, 2016 latest update
+-- Aug 25, 2016 latest update
 
 
 function sleep(n)
@@ -9,57 +9,6 @@ function sleep(n)
 	while os.clock() - t0 <= n do end
 
 end
-
--- initializes Cue time
-local timenod = {};
-local cuename = {};
-local CUECOUNT = 21;
-
-function initCue()
-	table.insert(timenod,0);      --1
-	table.insert(cuename,"Cue 1");
-	table.insert(timenod,3.50);   --2
-	table.insert(cuename,"Cue 2");
-	table.insert(timenod,8.80);   --3
-	table.insert(cuename,"Cue 3");
-	table.insert(timenod,20.07);  --4
-	table.insert(cuename,"Cue 4");
-	table.insert(timenod,28.03);  --5
-	table.insert(cuename,"Cue 5");
-	table.insert(timenod,34.04);  --6
-	table.insert(cuename,"Cue 6");
-	table.insert(timenod,37.97);  --7
-	table.insert(cuename,"Cue 7");
-	table.insert(timenod,48.73);  --8
-	table.insert(cuename,"Cue 8");
-	table.insert(timenod,54.03);  --9
-	table.insert(cuename,"Cue 9");
-	table.insert(timenod,59.30);  --10
-	table.insert(cuename,"Cue 11");
-	table.insert(timenod,64.63);  --11
-	table.insert(cuename,"Cue 12");
-	table.insert(timenod,70);     --12
-	table.insert(cuename,"Cue 13");
-	table.insert(timenod,70.03);  --13
-	table.insert(cuename,"Cue 13.4");
-	table.insert(timenod,75.30);  --14
-	table.insert(cuename,"Cue 13.5");
-	table.insert(timenod,75.33);  --15
-	table.insert(cuename,"Cue 13.6");
-	table.insert(timenod,80.73);  --16
-	table.insert(cuename,"Cue 13.65");
-	table.insert(timenod,80.77);    --17
-	table.insert(cuename,"Cue 13.66");
-	table.insert(timenod,86.10);    --18
-	table.insert(cuename,"Cue 13.75");
-	table.insert(timenod,86.13);    --19
-	table.insert(cuename,"Cue 13.76");
-	table.insert(timenod,91.30);    --20
-	table.insert(cuename,"Cue 14");
-	table.insert(timenod,102);    --21
-	table.insert(cuename,"Cue 15");
-end
-
 
 -- initializes the lights' positions
 function initLight()
@@ -80,136 +29,76 @@ function initLight()
 	light1Y = .827;
 	light1Z = .384;
 
---~ 	light5X = ;
---~ 	light5Y = ;
---~ 	light5Z = ;
-
---~ 	light6X = ;
---~ 	light6Y = ;
---~ 	light6Z = ;
-
---~ 	light7X = ;
---~ 	light7Y = ;
---~ 	light7Z = ;
-
---~ 	light8X = ;
---~ 	light8Y = ;
---~ 	light8Z = ;
-
---~ 	light9X = ;
---~ 	light9Y = ;
---~ 	light9Z = ;
-
---~ 	light10X = ;
---~ 	light10Y = ;
---~ 	light10Z = ;
-
---~ 	light11X = ;
---~ 	light11Y = ;
---~ 	light11Z = ;
-
---~ 	light12X = ;
---~ 	light12Y = ;
---~ 	light12Z = ;
-
 end
 
 --calcPan calculates the pan the light requires
 function calcPan(X, Y)
+	local pan = 0;
 
-	local slope = (-Y)/(X);
+	if math.abs(X) <= 0.05 then
+		if  Y >=0 then
+			pan = 90;
+		else
+			pan = -90;
+		end
+		return pan;
+	else
+		local slope = Y/X;
 
-	local panRad = math.atan(slope);
+		local panRad = math.atan(slope);
 
-	--local panRad = math.atan2((-Y), (X));
+		pan = math.deg(panRad);
 
-	--print("init atan: " .. panRad);
-	local pan = math.deg(panRad);
-	--print(pan);
+		if X<0 then
+			if Y >=0 then
+				pan = 180 + pan;
+			else
+				pan = -180 + pan;
+			end
+		end
 
-	return (pan + 270) * 0.9916666 - 270;
+		return pan;
+
+	end
+
+--~ 	return (pan + 270) * 0.9916666 - 270;
 end
 
 --calcTilt calculates the tilt the light requires
 function calcTilt(X, Y, Z)
+		local tilt = 0; -- horizon is 0
 
-	local a1 = Z;
-	local b1 = (X^2);
-	local c1 = (Y^2);
-	local d1 = b1 + c1;
-	local e1 = math.sqrt(d1);
-	local f1 = e1/a1;
-	--local g1 = math.atan(f1);
-	local g1 = math.atan2(e1, a1);
-	local tilt = math.deg(g1) * 1.1;
-	--print(tilt);
-	return tilt;
+		local xy = math.sqrt( X^2 + Y^2 );
 
-end
+		if xy <=0.05 then
+			if Z >=0 then
+				tilt = 90;
+			else
+				tilt = -45;
+			end
+			return tilt;
+		else
+			local slope = Z/xy;
 
---checkNeg makes sure the light doesn't point in the opposite direction
-function checkNeg(droneXVal, panCheck)
+			local tiltRad = math.atan(slope);
 
---~ 	if(tonumber(droneXVal) < 0) then
---~ 		panCheck = panCheck * -1;
---~ 	end
+			tilt = math.deg(tiltRad);
 
-	if (panCheck < 0) then
-		panCheck = panCheck - (panCheck * 2);
-	end
+			if tilt<-45 then
+				tilt = -45;
+			end
+		end
 
-	if (panCheck > 0) then
-		panCheck = panCheck - (panCheck * 2);
-	end
-
-	return panCheck;
+		return tilt;
 
 end
-
-
-function bottomLeftCheck(xBL, yBL, panToCheck)
-
-	if(xBL > 0 and yBL < 0) then
-		panToCheck = pantoCheck * -1;
-	end
-	return panToCheck;
-end
-
-
-function bottomRightCheck(xBR, yBR, panToCheck)
-
-	if(xBR < 0 and yBR < 0) then
-		pantoCheck = panToCheck * -1;
-	end
-	return panToCheck;
-end
-
-
-function topLeftCheck(xTL, yTL, panToCheck)
-
-	if(xTL > 0 and yTL > 0) then
-		panToCheck = panToCheck * -1;
-	end
-	return panToCheck;
-end
-
-
-function topRightCheck(xTR, yTR, panToCheck)
-
-	if(xTR < 0 and yTR > 0) then
-		panToCheck = panToCheck * -1;
-	end
-	return panToCheck;
-end
-
-
 
 
 function lightsLookAt(xD, yD, zD)
 
 	--Subtract the light coordinates so it will point correctly
-	local drone1X = xD - light1X;
-	local drone1Y = yD - light1Y;
+	local drone1X = -1 *(xD - light1X);
+	local drone1Y = -1 *(yD - light1Y);
 	local drone1Z = zD - light1Z;
 
 	local drone2X = xD - light2X;
@@ -220,160 +109,45 @@ function lightsLookAt(xD, yD, zD)
 	local drone3Y = yD - light3Y;
 	local drone3Z = zD - light3Z;
 
-	local drone4X = xD - light4X;
-	local drone4Y = yD - light4Y;
+	local drone4X = -1 *(xD - light4X);
+	local drone4Y = -1 *(yD - light4Y);
 	local drone4Z = zD - light4Z;
 
---~ 	local drone5X = x - light5X;
---~ 	local drone5Y = y - light5Y;
---~ 	local drone5Z = z - light5Z;
 
---~ 	local drone6X = x - light6X;
---~ 	local drone6Y = y - light6Y;
---~ 	local drone6Z = z - light6Z;
+	local pan1 = calcPan(drone1X, drone1Y);
 
---~ 	local drone7X = x - light7X;
---~ 	local drone7Y = y - light7Y;
---~ 	local drone7Z = z - light7Z;
+	local pan2 = calcPan(drone2X, drone2Y);
 
---~ 	local drone8X = x - light8X;
---~ 	local drone8Y = y - light8Y;
---~ 	local drone8Z = z - light8Z;
+	local pan3 = calcPan(drone3X, drone3Y);
 
---~ 	local drone9X = x - light9X;
---~ 	local drone9Y = y - light9Y;
---~ 	local drone9Z = z - light9Z;
-
---~ 	local drone10X = x - light10X;
---~ 	local drone10Y = y - light10Y;
---~ 	local drone10Z = z - light10Z;
-
---~ 	local drone11X = x - light11X;
---~ 	local drone11Y = y - light11Y;
---~ 	local drone11Z = z - light11Z;
-
---~ 	local drone12X = x - light12X;
---~ 	local drone12Y = y - light12Y;
---~ 	local drone12Z = z - light12Z;
-
-
-	--do 180 - pan for left lights
-	--do pan * -1 for bottom lights
-	--Calculate the pan and correct for drone location
-	pan1 = calcPan(drone1X, drone1Y);
-	pan1 = checkNeg(drone1X, pan1);
-	pan1 = pan1 * -1;
-	pan1 = 180 - pan1;
-	pan1 = bottomLeftCheck(drone1X, drone1Y, pan1);
-
-
-	pan2 = calcPan(drone2X, drone2Y);
-	pan2 = checkNeg(drone2X, pan2);
-	pan2 = pan2 * -1;
-	pan2 = bottomRightCheck(drone2X, drone2Y, pan2);
-
-
-	pan3 = calcPan(drone3X, drone3Y);
-	pan3 = checkNeg(drone3X, pan3);
-	--pan3 = 180 - pan3;
-	pan3 = topRightCheck(drone3X, drone3Y, pan3);
-
-
-	pan4 = calcPan(drone4X, drone4Y);
-	pan4 = checkNeg(drone4X, pan4);
-	--pan4 = pan4 * -1;
-	pan4 = 180 - pan4;
-	pan4 = topLeftCheck(drone4X, drone4Y, pan4);
-
-
-
---~ 	if(drone4X > 0 and drone4Y > 0) then
---~ 		--pan4 = (pan4 * -1);
---~ 		if(pan4 < 0) then
---~ 			pan4 = pan4 + 90;
---~ 		else
---~ 			pan4 = pan4 - 270;
---~ 		end
---~ 	end
-
---~ 	if(drone4Y > 0) and (drone4X > 0) then
---~ 		if(pan4 < 0) then
---~ 			pan4 = pan4 + 90;
---~ 		else
---~ 			pan4 = pan4 - 270;
---~ 		end
---~ 		--pan4 = pan4 * -1;
---~ 	end
-
---~ 	if(drone4Y < 0) and (drone4X < 0) then
---~ 		if(pan4 < 0) then
---~ 			pan4 = pan4 + 270;
---~ 		else
---~ 			pan4 = pan4 - 90;
---~ 		end
---~ 		--pan4 = pan4 * -1;
---~ 	end
+	local pan4 = calcPan(drone4X, drone4Y);
 
 
 	--Calculate tilt
-	tilt1 = calcTilt(drone1X, drone1Y, drone1Z);
+	tilt1 = -97.5 + calcTilt(drone1X, drone1Y, drone1Z);
 
-	tilt2 = calcTilt(drone2X, drone2Y, drone2Z);
+	tilt2 = 99.3 - calcTilt(drone2X, drone2Y, drone2Z);
 
-	tilt3 = calcTilt(drone3X, drone3Y, drone3Z);
+	tilt3 = 98.5 - calcTilt(drone3X, drone3Y, drone3Z);
 
-	tilt4 = calcTilt(drone4X, drone4Y, drone4Z);
+	tilt4 = -99 + calcTilt(drone4X, drone4Y, drone4Z);
 
 	--Send the commands to MA2
---~ 	print("Pan1: " .. pan1 .. " Tilt1: " .. tilt1 .. "\n");
---~ 	print("Pan2: " .. pan2 .. " Tilt2: " .. tilt2 .. "\n");
---~ 	print("Pan3: " .. pan3 .. " Tilt3: " .. tilt3 .. "\n");
---~ 	print("Pan4: " .. pan4 .. " Tilt4: " .. tilt4 .. "\n");
+	print("Pan1: " .. pan1 .. " Tilt1: " .. tilt1 .. "\n");
+	print("Pan2: " .. pan2 .. " Tilt2: " .. tilt2 .. "\n");
+	print("Pan3: " .. pan3 .. " Tilt3: " .. tilt3 .. "\n");
+	print("Pan4: " .. pan4 .. " Tilt4: " .. tilt4 .. "\n");
 
 	gma.cmd('Fixture 1 Attribute "Pan" at '.. pan1);
-	gma.cmd('Fixture 1 Attribute "Tilt" at '.. tilt1);
-
 	gma.cmd('Fixture 2 Attribute "Pan" at '.. pan2);
-	gma.cmd('Fixture 2 Attribute "Tilt" at '.. tilt2);
-
 	gma.cmd('Fixture 3 Attribute "Pan" at '.. pan3);
-	gma.cmd('Fixture 3 Attribute "Tilt" at '.. tilt3);
-
 	gma.cmd('Fixture 4 Attribute "Pan" at '.. pan4);
+
+	gma.cmd('Fixture 1 Attribute "Tilt" at '.. tilt1);
+	gma.cmd('Fixture 2 Attribute "Tilt" at '.. tilt2);
+	gma.cmd('Fixture 3 Attribute "Tilt" at '.. tilt3);
 	gma.cmd('Fixture 4 Attribute "Tilt" at '.. tilt4);
 
-end
-
-
--- send command to play music
---client socket
-function startMusic()
-
-	-- name for the host and port
-	local host = host or "localhost";
-	local port = port or 7000;
-	local socket = require("socket");
-	local s = assert(socket.tcp());
-
-	print("Waiting connection from music player...");
-
-	-- if success, return 0 -> c
-	local c = s:connect(host, port);
-
-	while true do
-
-		if not c then
-			print("connecting music player...");
-			c = s:connect(host, port);
-
-		else
-			print("music player connected. ");
-			s:close();
-			break;
-		end
-	end
-
-	print ("Ready to callCue!\n");
 
 end
 
@@ -430,8 +204,6 @@ end
 
 function main()
 
-	--initCue();
-
 	initLight();
 
 	--connect UWB
@@ -440,55 +212,37 @@ function main()
 	--connect camTrack
 	initCamServer();
 
-	--play music
---~ 	startMusic();
-
 --~ 	local t0 = os.clock();
-	local i = 1;
-
 	while true do
---~ 		--Cue message
---~ 		if i<=CUECOUNT then
---~ 			if os.clock() - t0 >= timenod[i] then
---~ 				if i < 2 then
---~ 					print (cuename[i]);
---~ 					gma.cmd('Goto '..cuename[i]);
---~ 				else
---~ 					gma.cmd('Go ');
---~ 				end
-
---~ 				i = i + 1;
---~ 			end
---~ 		end
 
 		--camera message
 		local camInfo;
 		camInfo = cam_cli:receive();
-		print("cam Info: "..camInfo);
+		--print("cam Info: "..camInfo);
 
 
 		if camInfo == "no" then
---~ 			--UWB Message
---~ 			local UWBinfo;
---~ 			--print("lmoah");
---~ 			UWBinfo = uwb_cli:receive();
---~ 			--print("in");
---~ 			--print(UWBinfo);
---~ 			if UWBinfo then
---~ 				--camera no message, control by UWB message
---~ 				local UWB_splitInfo = {};
---~ 				for word in string.gmatch(UWBinfo, '([^,]+)') do
---~ 					table.insert(UWB_splitInfo, word);
+--~ 				--UWB Message
+--~ 				local UWBinfo;
+--~ 				UWBinfo = uwb_cli:receive();
+--~ 				--print(UWBinfo);
+--~ 				if UWBinfo then
+--~ 					--camera no message, control by UWB message
+--~ 					local UWB_splitInfo = {};
+--~ 					for word in string.gmatch(UWBinfo, '([^,]+)') do
+--~ 						table.insert(UWB_splitInfo, word);
+--~ 					end
+
+--~ 					--The coordinates we need are in the 6th, 7th, and 8th spots of the table
+--~ 					local x = UWB_splitInfo[6];
+--~ 					local y = UWB_splitInfo[7];
+--~ 					local z = UWB_splitInfo[8] - .4;
+
+--~ 					print("UWB pos: ".. x .. " " .. y .. " " .. z);
+--~ 					lightsLookAt(x, y, z);
+--~ 				else
+--~ 					break;
 --~ 				end
-
---~ 				--The coordinates we need are in the 6th, 7th, and 8th spots of the table
---~ 				local x = UWB_splitInfo[6];
---~ 				local y = UWB_splitInfo[7];
---~ 				local z = UWB_splitInfo[8] - .4;
-
---~ 				--print("UWB pos: ".. x .. y);
---~ 				lightsLookAt(x, y, z);
---~ 			end
 		elseif camInfo == "end" then
 			break;
 
@@ -503,15 +257,15 @@ function main()
 			local vs = tonumber(cam_splitInfo[3]);
 
 
---~ 			--MA2 spin the light
-			print('Fixture '..id..' Attribute "Pan" at+ '.. hs);
-			print('Fixture '..id..' Attribute "Tilt" at+ '.. vs);
---~ 			gma.cmd('Fixture '..id..' Attribute "Pan" at+ '.. hs);
---~ 			gma.cmd('Fixture '..id..' Attribute "Tilt" at+ '.. vs);
+--~ 				--MA2 spin the light
+				print('Fixture '..id..' Attribute "Pan" at+ '.. hs);
+				print('Fixture '..id..' Attribute "Tilt" at+ '.. vs);
+--~ 				gma.cmd('Fixture '..id..' Attribute "Pan" at+ '.. hs);
+--~ 				gma.cmd('Fixture '..id..' Attribute "Tilt" at+ '.. vs);
 
 		end
 
---~ 		sleep(.5);
+		--sleep(.5);
 	end
 
 	cam_ser:close();

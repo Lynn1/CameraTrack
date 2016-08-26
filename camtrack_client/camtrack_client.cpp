@@ -27,11 +27,12 @@ int CAMNUM = 4;//number of cameras
 const int F_LEN = 12;	//focal length = 16mm
 const float ACTUAL_WIDTH = 4.8; //4.8mm*3.6mm
 const float ACTUAL_HEIGHT = 3.6;
-//const int FRAME_WIDTH = 640;	//default capture width and height
-//const int FRAME_HEIGHT = 480;
 
-const int FRAME_WIDTH = 704; //after USB-DVR compress
-const int FRAME_HEIGHT = 576;
+const int FRAME_WIDTH = 640;	//default capture width and height
+const int FRAME_HEIGHT = 480;
+
+const int FRAME_WIDTH_DVR = 704; //after USB-DVR compress
+const int FRAME_HEIGHT_DVR = 576;
 
 //const float Cam_Light_D = 13-4;
 //const float Marks_D = 48+5; 
@@ -95,28 +96,28 @@ void initgloable()
 	//so that we can calculate the facA and facB 
 
 	//light 1
-	facA[0] = (float)4/17;
-	facB[0] = (float)-38/17;
-	facC[0] = (float)5/17;
-	facD[0] = (float)-379/17;
+	facA[0] = (float)0.181818;
+	facB[0] = (float)23;
+	facC[0] = (float)0.227273;
+	facD[0] = (float)-13.5;
 
 	//light 2
-	facA[1] = (float)1/7;
-	facB[1] = (float)-32;
-	facC[1] = (float)0.25;
-	facD[1] = (float)10.5;
+	facA[1] = (float)0.02777;
+	facB[1] = (float)-21.75;
+	facC[1] = (float)0.1667;
+	facD[1] = (float)15.5;
 
 	//light 3
-	facA[2] = (float)-2/41;
-	facB[2] = (float)-545/41;
-	facC[2] = (float)12/41;
-	facD[2] = (float)-1035/41;
+	facA[2] = (float)-0.021;
+	facB[2] = (float)-23.0486;
+	facC[2] = (float)0.146883;
+	facD[2] = (float)-19.66;
 
 	//light 4
-	facA[3] = (float)1/29;
-	facB[3] = (float)-5;
-	facC[3] = (float)13/29;
-	facD[3] = (float)-24;
+	facA[3] = (float)0.0278696;
+	facB[3] = (float)5.10774;
+	facC[3] = (float)0.473783;
+	facD[3] = (float)-1.16845;
 
 
 	for (int i =0;i<CAMNUM;i++)
@@ -125,7 +126,7 @@ void initgloable()
 		OriginWinName[i] = "Original"+intToString(i+1);
 	}
 
-	BarWinName = "Bar";
+	//BarWinName = "Bar";
 	BarWinName = TrackWinName[0];
 }
 static void help()
@@ -152,7 +153,7 @@ void initSocket(SOCKET &socketSrv, SOCKET &socketClient)
 	socketSrv = socket(AF_INET, SOCK_STREAM, 0);
 
 	//as client:
-	addrSrv.sin_addr.S_un.S_addr = inet_addr("192.168.1.2");// localhost 127.0.0.1
+	addrSrv.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");// localhost 127.0.0.1 192.168.1.2
 
 	addrSrv.sin_family = AF_INET;
 	addrSrv.sin_port = htons(6000);
@@ -184,8 +185,8 @@ int main()
 	for (int i =0;i<CAMNUM;i++)
 	{
 		cap[i].open(i+1);//notice
-		cap[i].set(CV_CAP_PROP_FRAME_WIDTH, FRAME_WIDTH);
-		cap[i].set(CV_CAP_PROP_FRAME_HEIGHT, FRAME_HEIGHT);
+		cap[i].set(CV_CAP_PROP_FRAME_WIDTH, FRAME_WIDTH_DVR);
+		cap[i].set(CV_CAP_PROP_FRAME_HEIGHT, FRAME_HEIGHT_DVR);
 
 		if(!cap[i].isOpened())  
 		{  
@@ -193,9 +194,9 @@ int main()
 			return -1;  
 		} 
 		namedWindow(TrackWinName[i]);
-		namedWindow(OriginWinName[i]);
+		//namedWindow(OriginWinName[i]);
 	}
-	//namedWindow(OriginWinName[0], CV_WINDOW_AUTOSIZE);
+	namedWindow(OriginWinName[0], CV_WINDOW_AUTOSIZE);
 	//namedWindow(TrackWinName[0], CV_WINDOW_AUTOSIZE);
 	
 	int wait = 0;
@@ -209,6 +210,7 @@ int main()
 	vector<Mat> camFeed(4);   //matrix to store each frame of the camera feed
 	vector<Mat> threshImg(4); //matrix storage for binary threshold image
 
+	Mat tempImg;
 	while(1)
 	{
 		int usr = waitKey (delay);//delay 30ms so that the screen can refresh
@@ -221,13 +223,15 @@ int main()
 		
 		for (int i =0;i<CAMNUM;i++)
 		{
-			if (!cap[i].read(camFeed[i]))//store image to matrix
+
+			if (!cap[i].read(tempImg))//store image to matrix
 			{	
 				cout<<"Can't read camFeed!"<<i<<endl;
 				failed = true ; 
 				break;
 			}
 
+			resize(tempImg, camFeed[i], Size(FRAME_WIDTH, FRAME_HEIGHT));
 			preprocess(camFeed[i], threshImg[i]);
 
 			//initialize
@@ -252,7 +256,7 @@ int main()
 
 				float dx = facA[i] * len + facB[i];
 				float dy = facC[i] * len + facD[i];
-				
+
 				//spot.x = FRAME_WIDTH/2;
 				spot.x = FRAME_WIDTH/2 + dx;
 				//spot.y = FRAME_HEIGHT/2;
@@ -297,11 +301,11 @@ int main()
 			///********Socket*********/
 
 			//show frames 
-			imshow(OriginWinName[i],camFeed[i]);
+			//imshow(OriginWinName[i],camFeed[i]);
 			imshow(TrackWinName[i],threshImg[i]);
 		}
-		//MultiImage_OneWin(OriginWinName[0], camFeed, cvSize(2, 2), cvSize(320,240));  
-		//MultiImage_OneWin(TrackWinName[0], threshImg, cvSize(2, 2), cvSize(320,240));
+		MultiImage_OneWin(OriginWinName[0], camFeed, cvSize(2, 2), cvSize(640*0.75,480*0.75));  
+		//MultiImage_OneWin(TrackWinName[0], threshImg, cvSize(2, 2), cvSize(640*0.5,480*0.5));
 		if(failed)
 			break;
 	}
@@ -331,7 +335,6 @@ void createTrackbars(){
 
 	//use offsetv and offseth trackbar to get offset value twice,
 	//so that we can calculate the facA and facB 
-
 	//createTrackbar( "OffH", BarWinName, &offseth, 100, on_trackbar );
 	//createTrackbar( "OffV", BarWinName, &offsetv, 100, on_trackbar );
 }
@@ -572,6 +575,7 @@ int trackObject(int &cx, int &cy, float &len, Mat&thresholdImg, Mat &markImg)
 	mlines.clear();
 	plines.clear();
 
+	putText(markImg,"tc"+intToString(tCount),Point(0,150),1,2,Scalar(0,0,255),2);
 	return tCount;
 }
 
@@ -638,6 +642,7 @@ void MultiImage_OneWin(const string& MultiShow_WinName, const vector<Mat>& SrcIm
 {
 	//Window's image
 	Mat Disp_Img;
+
 	//Width of source image
 	CvSize Img_OrigSize = cvSize(SrcImg_V[0].cols, SrcImg_V[0].rows);
 	//******************** Set the width for displayed image ********************//
