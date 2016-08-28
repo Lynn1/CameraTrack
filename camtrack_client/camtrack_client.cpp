@@ -2,7 +2,7 @@
 Video Tracking for Quadrotor Aircraft 
 This is a test program for tracking quadrotor.
 by Lin Lin July 13, 2016.
-latest update: August 6,2016
+latest update: August 28,2016
 */
 #include <Winsock2.h>
 #pragma comment(lib, "Ws2_32.lib")
@@ -21,6 +21,7 @@ using namespace std;
 using namespace cv; 
 
 int CAMNUM = 4;//number of cameras
+int UWB = 0;
 
 //camera parameter
 //const int F_LEN = 16;	
@@ -31,11 +32,11 @@ const float ACTUAL_HEIGHT = 3.6;
 const int FRAME_WIDTH = 640;	//default capture width and height
 const int FRAME_HEIGHT = 480;
 
-const int FRAME_WIDTH_DVR = 704; //after USB-DVR compress
-const int FRAME_HEIGHT_DVR = 576;
+//const int FRAME_WIDTH_DVR = 704; //after USB-DVR compress
+//const int FRAME_HEIGHT_DVR = 576;
 
-//const float Cam_Light_D = 13-4;
-//const float Marks_D = 48+5; 
+//const float Cam_Light_D = 13;
+//const float Marks_D = 48; 
 
 float facA[4];
 float facB[4];
@@ -95,7 +96,7 @@ void initgloable()
 	//use offsetv and offseth trackbar to get offset value twice,
 	//so that we can calculate the facA and facB 
 
-	//light 1
+	//light 1(lightID)
 	facA[0] = (float)0.181818;
 	facB[0] = (float)23;
 	facC[0] = (float)0.227273;
@@ -153,7 +154,7 @@ void initSocket(SOCKET &socketSrv, SOCKET &socketClient)
 	socketSrv = socket(AF_INET, SOCK_STREAM, 0);
 
 	//as client:
-	addrSrv.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");// localhost 127.0.0.1 192.168.1.2
+	addrSrv.sin_addr.S_un.S_addr = inet_addr("192.168.1.3");// localhost 127.0.0.1 192.168.1.2
 
 	addrSrv.sin_family = AF_INET;
 	addrSrv.sin_port = htons(6000);
@@ -184,9 +185,11 @@ int main()
 	VideoCapture cap[4];
 	for (int i =0;i<CAMNUM;i++)
 	{
-		cap[i].open(i+1);//notice
-		cap[i].set(CV_CAP_PROP_FRAME_WIDTH, FRAME_WIDTH_DVR);
-		cap[i].set(CV_CAP_PROP_FRAME_HEIGHT, FRAME_HEIGHT_DVR);
+		cap[i].open(i);//notice
+		//cap[i].set(CV_CAP_PROP_FRAME_WIDTH, FRAME_WIDTH_DVR);
+		//cap[i].set(CV_CAP_PROP_FRAME_HEIGHT, FRAME_HEIGHT_DVR);
+		cap[i].set(CV_CAP_PROP_FRAME_WIDTH, FRAME_WIDTH);
+		cap[i].set(CV_CAP_PROP_FRAME_HEIGHT, FRAME_HEIGHT);
 
 		if(!cap[i].isOpened())  
 		{  
@@ -210,28 +213,24 @@ int main()
 	vector<Mat> camFeed(4);   //matrix to store each frame of the camera feed
 	vector<Mat> threshImg(4); //matrix storage for binary threshold image
 
-	Mat tempImg;
+	//Mat tempImg;
 	while(1)
 	{
-		int usr = waitKey (delay);//delay 30ms so that the screen can refresh
-		if(usr==27) //"ESC"
-			break;
-		framecount++;
-		delaySteps++;
 		if (DELAY<=0)
 			DELAY=1;
 		
 		for (int i =0;i<CAMNUM;i++)
 		{
 
-			if (!cap[i].read(tempImg))//store image to matrix
+			//if (!cap[i].read(tempImg))//store image to matrix
+			if (!cap[i].read(camFeed[i]))
 			{	
 				cout<<"Can't read camFeed!"<<i<<endl;
 				failed = true ; 
 				break;
 			}
 
-			resize(tempImg, camFeed[i], Size(FRAME_WIDTH, FRAME_HEIGHT));
+			//resize(tempImg, camFeed[i], Size(FRAME_WIDTH, FRAME_HEIGHT));
 			preprocess(camFeed[i], threshImg[i]);
 
 			//initialize
@@ -248,14 +247,25 @@ int main()
 			char sSend[128];
 			if(1==tc)
 			{
+				int lightID=i+1;
+				if (i == 0)
+					lightID = 2;
+				else if ( i == 1 )
+					lightID = 4;
+				else if ( i == 2)
+					lightID = 3;
+				else if ( i == 3)
+					lightID = 1;
+				// check this after you pull out your usb
+
 				//use offsetv and offseth trackbar to get offset value twice,
 				//so that we can calculate the facA and facB 
 				//int dx = offseth - 50 ;
 				//int dy = offsetv - 50 ;
-				//cout <<i+1<<" len:"<<len<<endl;
+				//cout <<lightID<<" len:"<<len<<endl;
 
-				float dx = facA[i] * len + facB[i];
-				float dy = facC[i] * len + facD[i];
+				float dx = facA[lightID-1] * len + facB[lightID-1];
+				float dy = facC[lightID-1] * len + facD[lightID-1];
 
 				//spot.x = FRAME_WIDTH/2;
 				spot.x = FRAME_WIDTH/2 + dx;
@@ -265,12 +275,9 @@ int main()
 				dospin = TransAngle(obj,spot,h_spin,v_spin);
 				float hs = (float)h_spin/STEPS; // half step
 				float vs = (float)v_spin/STEPS;
-				
-				int lightID=i+1;
+
 				if (1==lightID||4==lightID)
 					vs = -vs;
-				// check this after you pull out your usb
-				
 				sprintf(sSend,"%d,%f,%f\n",lightID,hs,vs);//id = i+1
 			}
 
@@ -289,15 +296,6 @@ int main()
 				cout<<tarcount++<<":"<<sSend;
 				delaySteps = 0;
 			}
-			else 
-			{
-				if(framecount%6==0)
-				{
-					char emptyInfo[20] = "no\n";
-					send(socketClient, emptyInfo, strlen(emptyInfo), 0);
-					framecount=0;
-				}
-			}
 			///********Socket*********/
 
 			//show frames 
@@ -306,8 +304,20 @@ int main()
 		}
 		MultiImage_OneWin(OriginWinName[0], camFeed, cvSize(2, 2), cvSize(640*0.75,480*0.75));  
 		//MultiImage_OneWin(TrackWinName[0], threshImg, cvSize(2, 2), cvSize(640*0.5,480*0.5));
+
 		if(failed)
 			break;
+
+		int usr = waitKey (delay);//delay 30ms so that the screen can refresh
+		if(usr==27) //"ESC"
+			break;
+		else if (usr==97)//a-97 u-117
+		{	
+			char Info[20] = "uwb\n";
+			send(socketClient, Info, strlen(Info), 0);
+		}
+		framecount++;
+		delaySteps++;
 	}
 
 	//清理套接字
@@ -575,7 +585,7 @@ int trackObject(int &cx, int &cy, float &len, Mat&thresholdImg, Mat &markImg)
 	mlines.clear();
 	plines.clear();
 
-	putText(markImg,"tc"+intToString(tCount),Point(0,150),1,2,Scalar(0,0,255),2);
+	putText(markImg,"tc"+intToString(tCount),Point(0,60),1,2,Scalar(0,0,255),2);
 	return tCount;
 }
 

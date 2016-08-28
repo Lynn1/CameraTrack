@@ -148,7 +148,6 @@ function lightsLookAt(xD, yD, zD)
 	gma.cmd('Fixture 3 Attribute "Tilt" at '.. tilt3);
 	gma.cmd('Fixture 4 Attribute "Tilt" at '.. tilt4);
 
-
 end
 
 
@@ -206,45 +205,31 @@ function main()
 
 	initLight();
 
-	--connect UWB
---~ 	initUWBClient();
-
 	--connect camTrack
 	initCamServer();
 
---~ 	local t0 = os.clock();
+	local USEUWB = 0;
+	local CAM = 0;
+
+	--local t0 = os.clock();
+
+	local id,hs,vs;
+	local x,y,z;
+
 	while true do
+		CAM = 0;
 
 		--camera message
 		local camInfo;
 		camInfo = cam_cli:receive();
-		--print("cam Info: "..camInfo);
+		print("cam Info: "..camInfo);
 
-
-		if camInfo == "no" then
---~ 				--UWB Message
---~ 				local UWBinfo;
---~ 				UWBinfo = uwb_cli:receive();
---~ 				--print(UWBinfo);
---~ 				if UWBinfo then
---~ 					--camera no message, control by UWB message
---~ 					local UWB_splitInfo = {};
---~ 					for word in string.gmatch(UWBinfo, '([^,]+)') do
---~ 						table.insert(UWB_splitInfo, word);
---~ 					end
-
---~ 					--The coordinates we need are in the 6th, 7th, and 8th spots of the table
---~ 					local x = UWB_splitInfo[6];
---~ 					local y = UWB_splitInfo[7];
---~ 					local z = UWB_splitInfo[8] - .4;
-
---~ 					print("UWB pos: ".. x .. " " .. y .. " " .. z);
---~ 					lightsLookAt(x, y, z);
---~ 				else
---~ 					break;
---~ 				end
-		elseif camInfo == "end" then
+		--process caminfo
+		if camInfo == "end" then
 			break;
+
+		elseif camInfo == "uwb" then
+			USEUWB = 1;
 
 		elseif camInfo then
 			local cam_splitInfo = {};
@@ -252,24 +237,55 @@ function main()
 				table.insert(cam_splitInfo, word);
 			end
 
-			local id = tonumber(cam_splitInfo[1]);
-			local hs = tonumber(cam_splitInfo[2]);
-			local vs = tonumber(cam_splitInfo[3]);
+			id = tonumber(cam_splitInfo[1]);
+			hs = tonumber(cam_splitInfo[2]);
+			vs = tonumber(cam_splitInfo[3]);
+
+			print("cam spin: light ".. id .. "pan+ " .. hs .. "tilt+ " .. vs);
+			CAM = 1;
+		end
 
 
---~ 				--MA2 spin the light
-				print('Fixture '..id..' Attribute "Pan" at+ '.. hs);
-				print('Fixture '..id..' Attribute "Tilt" at+ '.. vs);
---~ 				gma.cmd('Fixture '..id..' Attribute "Pan" at+ '.. hs);
---~ 				gma.cmd('Fixture '..id..' Attribute "Tilt" at+ '.. vs);
+		--make decision and spin lights
+		print(USEUWB);
+		if USEUWB == 1 then
+			--use uwb position
 
+			--connect UWB
+			initUWBClient();
+			local UWBinfo;
+			uwbInfo = uwb_cli:receive();
+			--print("uwb Info: "..uwbInfo);
+			uwb_cli:close();
+
+			--process uwbinfo
+			if uwbInfo then
+				local UWB_splitInfo = {};
+				for word in string.gmatch(uwbInfo, '([^,]+)') do
+					table.insert(UWB_splitInfo, word);
+				end
+
+				x = UWB_splitInfo[6];
+				y = UWB_splitInfo[7];
+				z = UWB_splitInfo[8] - .4;
+
+				print("UWB pos: ".. x .. " " .. y .. " " .. z);
+				lightsLookAt(x, y, z);
+			end
+			USEUWB = 0;
+
+		elseif USEUWB == 0 and CAM == 1 then
+			--use cam tracking
+			print('Fixture '..id..' Attribute "Pan" at+ '.. hs);
+			print('Fixture '..id..' Attribute "Tilt" at+ '.. vs);
+			gma.cmd('Fixture '..id..' Attribute "Pan" at+ '.. hs);
+			gma.cmd('Fixture '..id..' Attribute "Tilt" at+ '.. vs);
 		end
 
 		--sleep(.5);
 	end
 
 	cam_ser:close();
---~ 	uwb_cli:close();
 	print ("End.");
 
 end
