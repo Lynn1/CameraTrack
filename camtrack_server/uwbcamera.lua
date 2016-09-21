@@ -249,30 +249,30 @@ function main()
 		--make decision and spin lights
 		print(USEUWB);
 		if USEUWB == 1 then
-			--use uwb position
+--~ 			--use uwb position
 
-			--connect UWB
-			initUWBClient();
-			local UWBinfo;
-			uwbInfo = uwb_cli:receive();
-			--print("uwb Info: "..uwbInfo);
-			uwb_cli:close();
+--~ 			--connect UWB
+--~ 			initUWBClient();
+--~ 			local UWBinfo;
+--~ 			uwbInfo = uwb_cli:receive();
+--~ 			--print("uwb Info: "..uwbInfo);
+--~ 			uwb_cli:close();
 
-			--process uwbinfo
-			if uwbInfo then
-				local UWB_splitInfo = {};
-				for word in string.gmatch(uwbInfo, '([^,]+)') do
-					table.insert(UWB_splitInfo, word);
-				end
+--~ 			--process uwbinfo
+--~ 			if uwbInfo then
+--~ 				local UWB_splitInfo = {};
+--~ 				for word in string.gmatch(uwbInfo, '([^,]+)') do
+--~ 					table.insert(UWB_splitInfo, word);
+--~ 				end
 
-				x = UWB_splitInfo[6];
-				y = UWB_splitInfo[7];
-				z = UWB_splitInfo[8] - .4;
+--~ 				x = UWB_splitInfo[6];
+--~ 				y = UWB_splitInfo[7];
+--~ 				z = UWB_splitInfo[8] - .4;
 
-				print("UWB pos: ".. x .. " " .. y .. " " .. z);
-				lightsLookAt(x, y, z);
-			end
-			USEUWB = 0;
+--~ 				print("UWB pos: ".. x .. " " .. y .. " " .. z);
+--~ 				lightsLookAt(x, y, z);
+--~ 			end
+--~ 			USEUWB = 0;
 
 		elseif USEUWB == 0 and CAM == 1 then
 			--use cam tracking

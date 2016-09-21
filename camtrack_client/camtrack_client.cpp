@@ -51,7 +51,7 @@ const int MAX_NUM_OBJECTS=50;	//max number of objects to be detected in frame
 const int MIN_OBJECT_AREA = 5*5;	//minimum and maximum object area
 const int MAX_OBJECT_AREA = FRAME_HEIGHT*FRAME_WIDTH/1.5;
 
-int V_MIN = 180;
+int V_MIN = 160;
 int V_MAX = 256;
 //int S_Diff = 2;		//acceptable slope difference between parallel lines
 //int S_Diff_MAX = 20;
@@ -96,29 +96,29 @@ void initgloable()
 	//use offsetv and offseth trackbar to get offset value twice,
 	//so that we can calculate the facA and facB 
 
-	//light 1(lightID)
-	facA[0] = (float)0.181818;
-	facB[0] = (float)23;
-	facC[0] = (float)0.227273;
-	facD[0] = (float)-13.5;
+	//light 1
+	facA[0] = (float)0;
+	facB[0] = (float)13;
+	facC[0] = (float)0.73913043478261;
+	facD[0] = (float)-38.95652173913;
 
 	//light 2
-	facA[1] = (float)0.02777;
-	facB[1] = (float)-21.75;
-	facC[1] = (float)0.1667;
-	facD[1] = (float)15.5;
+	facA[1] = (float)0.054054054054054;
+	facB[1] = (float)16.945945945946;
+	facC[1] = (float)0.2972972972973;
+	facD[1] = (float)-13.297297297297;
 
 	//light 3
-	facA[2] = (float)-0.021;
-	facB[2] = (float)-23.0486;
-	facC[2] = (float)0.146883;
-	facD[2] = (float)-19.66;
+	facA[2] = (float)-0.030769230769231;
+	facB[2] = (float)-18.923076923077;
+	facC[2] = (float)0.21538461538462;
+	facD[2] = (float)-14.538461538462;
 
 	//light 4
-	facA[3] = (float)0.0278696;
-	facB[3] = (float)5.10774;
-	facC[3] = (float)0.473783;
-	facD[3] = (float)-1.16845;
+	facA[3] = (float)-0.11764705882353;
+	facB[3] = (float)-6.4705882352941;
+	facC[3] = (float)-0;
+	facD[3] = (float)14;
 
 
 	for (int i =0;i<CAMNUM;i++)
@@ -154,7 +154,8 @@ void initSocket(SOCKET &socketSrv, SOCKET &socketClient)
 	socketSrv = socket(AF_INET, SOCK_STREAM, 0);
 
 	//as client:
-	addrSrv.sin_addr.S_un.S_addr = inet_addr("192.168.1.3");// localhost 127.0.0.1 192.168.1.2
+	addrSrv.sin_addr.S_un.S_addr = inet_addr("192.168.1.3");
+	//addrSrv.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");// localhost            
 
 	addrSrv.sin_family = AF_INET;
 	addrSrv.sin_port = htons(6000);
@@ -248,24 +249,30 @@ int main()
 			if(1==tc)
 			{
 				int lightID=i+1;
-				if (i == 0)
-					lightID = 2;
-				else if ( i == 1 )
-					lightID = 4;
-				else if ( i == 2)
-					lightID = 3;
-				else if ( i == 3)
-					lightID = 1;
+				//if (i == 0)
+				//	lightID = 2;
+				//else if ( i == 1 )
+				//	lightID = 3;
+				//else if ( i == 2)
+				//	lightID = 1;
+				//else if ( i == 3)
+				//	lightID = 4;
 				// check this after you pull out your usb
+
+				//float dx = 0;
+				//float dy = 0;
 
 				//use offsetv and offseth trackbar to get offset value twice,
 				//so that we can calculate the facA and facB 
 				//int dx = offseth - 50 ;
 				//int dy = offsetv - 50 ;
-				//cout <<lightID<<" len:"<<len<<endl;
-
+				//cout<<lightID<<" len:"<<len<<endl;
+				
+				//----use this
 				float dx = facA[lightID-1] * len + facB[lightID-1];
 				float dy = facC[lightID-1] * len + facD[lightID-1];
+
+
 
 				//spot.x = FRAME_WIDTH/2;
 				spot.x = FRAME_WIDTH/2 + dx;
@@ -278,6 +285,7 @@ int main()
 
 				if (1==lightID||4==lightID)
 					vs = -vs;
+				lightID = lightID*2-1;//1 3 5 7
 				sprintf(sSend,"%d,%f,%f\n",lightID,hs,vs);//id = i+1
 			}
 
